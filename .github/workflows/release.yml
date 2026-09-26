@@ -30,8 +30,14 @@ jobs:
 
       # Tests ran in CI for the tagged commit; this job only builds, signs and uploads.
       - name: Build, sign and upload
-        run: mvn -B -Prelease -DskipTests deploy
+        run: mvn -B -Prelease -DskipTests deploy 2>&1 | tee release.log; exit ${PIPESTATUS[0]}
+        shell: bash
         env:
           CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
           CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      # The Maven errors as annotations, readable on the run page without downloading logs.
+      - name: Annotate errors
+        if: failure()
+        run: grep -E "\[ERROR\]|gpg:" release.log | grep -v "^\[ERROR\] *$" | head -15 | sed 's/^/::error::/' || true
