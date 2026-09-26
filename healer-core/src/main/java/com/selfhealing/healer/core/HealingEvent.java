@@ -31,6 +31,8 @@ public class HealingEvent {
     /** Where the locator was declared, relative to a source root (com/acme/pages/LoginPage.java). */
     public String sourceFile;
     public int sourceLine;
+    /** The selector as written in the source when it differs from originalSelector (Selenium: "x" of By.id("x")). */
+    public String sourceLiteral;
     public HealingSuggestion.Source source;
     public double confidence;
     public String reasoning;

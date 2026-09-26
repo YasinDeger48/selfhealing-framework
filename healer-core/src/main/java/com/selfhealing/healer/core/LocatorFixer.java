@@ -102,6 +102,7 @@ public final class LocatorFixer {
                 .filter(e -> (e.status == HealingEvent.Status.HEALED || e.status == HealingEvent.Status.SUGGESTED)
                         && e.healedSelector != null && e.originalSelector != null)
                 .collect(Collectors.groupingBy(e -> e.originalSelector, LinkedHashMap::new, Collectors.toList()));
+        // (Selenium: the literal in the source is the By value, e.g. "login-username" of By.id("login-username"))
 
         List<Fix> fixes = new ArrayList<>();
         Map<Path, List<Replacement>> edits = new LinkedHashMap<>();
@@ -115,7 +116,8 @@ public final class LocatorFixer {
                 continue;
             }
             List<Occurrence> found = new ArrayList<>();
-            for (Path file : sources) found.addAll(find(file, lines(file, contents), first.originalSelector));
+            String written = first.sourceLiteral != null ? first.sourceLiteral : first.originalSelector;
+            for (Path file : sources) found.addAll(find(file, lines(file, contents), written));
             Occurrence target = choose(found, first, projectDir);
             if (target == null) {
                 String note = found.isEmpty() ? "notFound" : "ambiguous:" + found.size();
@@ -151,7 +153,9 @@ public final class LocatorFixer {
                 continue;
             }
             Path file = projectDir.resolve(f.file());
-            List<Occurrence> at = find(file, lines(file, contents), f.originalSelector()).stream()
+            String written = events.stream().filter(e -> f.originalSelector().equals(e.originalSelector) && e.sourceLiteral != null)
+                    .map(e -> e.sourceLiteral).findFirst().orElse(f.originalSelector());
+            List<Occurrence> at = find(file, lines(file, contents), written).stream()
                     .filter(o -> o.line() + 1 == f.line()).toList();
             if (at.size() != 1) {
                 result.add(new Fix(f.key(), f.originalSelector(), f.healedSelector(), f.file(), f.line(), Status.MANUAL,
@@ -227,11 +231,34 @@ public final class LocatorFixer {
                 }
                 String literal = literal(selector, form);
                 for (int at = line.indexOf(literal); at >= 0; at = line.indexOf(literal, at + 1)) {
-                    out.add(new Occurrence(file, i, at, at + literal.length(), form));
+                    out.add(seleniumCall(file, i, line, at, at + literal.length(), form));
                 }
             }
         }
         return out;
+    }
+
+    private static final Pattern BY_CALL = Pattern.compile("By\\.(id|name|className|tagName|xpath|linkText|partialLinkText|cssSelector)\\(\\s*$");
+    private static final Pattern FIND_BY_ATTR = Pattern.compile("\\b(id|name|className|tagName|xpath|linkText|partialLinkText|css)\\s*=\\s*$");
+
+    /**
+     * A literal inside Selenium's By.id("x") or @FindBy(id = "x"): the occurrence then covers the whole call or attribute,
+     * so the fix can switch it to CSS (By.cssSelector / css =), since healed selectors are CSS.
+     */
+    private static Occurrence seleniumCall(Path file, int line, String text, int start, int end, String form) {
+        if (!form.equals("double")) return new Occurrence(file, line, start, end, form);
+        String before = text.substring(0, start);
+        String after = text.substring(end);
+        Matcher by = BY_CALL.matcher(before);
+        Matcher close = Pattern.compile("^\\s*\\)").matcher(after);
+        if (by.find() && close.find() && !by.group(1).equals("cssSelector")) {
+            return new Occurrence(file, line, by.start(), end + close.end(), "by");
+        }
+        Matcher attr = FIND_BY_ATTR.matcher(before);
+        if (attr.find() && before.contains("@FindBy") && !attr.group(1).equals("css")) {
+            return new Occurrence(file, line, attr.start(), end, "findBy");
+        }
+        return new Occurrence(file, line, start, end, form);
     }
 
     /** The declaring line if the selector is there, else the only occurrence in that file, else the only one at all. */
@@ -286,6 +313,8 @@ public final class LocatorFixer {
         String s = selector;
         if (form.equals("double") && s.contains("\"") && !s.contains("'")) s = s.replace('"', '\'');
         if (form.equals("single") && s.contains("'") && !s.contains("\"")) s = s.replace('\'', '"');
+        if (form.equals("by")) return "By.cssSelector(" + encode(selector, "double") + ")";
+        if (form.equals("findBy")) return "css = " + encode(selector, "double");
         return form.equals("raw") ? s : literal(s, form);
     }
 

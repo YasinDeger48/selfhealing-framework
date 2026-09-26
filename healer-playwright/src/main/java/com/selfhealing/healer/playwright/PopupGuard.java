@@ -5,10 +5,6 @@ import com.microsoft.playwright.JSHandle;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.PlaywrightException;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
@@ -18,7 +14,7 @@ import java.util.Map;
  */
 final class PopupGuard {
 
-    private static final String LIB = load();
+    private static final String LIB = com.selfhealing.healer.core.BrowserScripts.POPUP;
     /** popup.js with healer.js for readable selectors in the report. */
     private static final String INSPECT = "el => (" + LIB + ").inspect(el, e => (" + PlaywrightPageAdapter.LIB + ").uniqueSelector(e))";
     private static final String BUTTON = "el => (" + LIB + ").button(el)";
@@ -29,14 +25,6 @@ final class PopupGuard {
     }
 
     private PopupGuard() {
-    }
-
-    private static String load() {
-        try (InputStream in = PopupGuard.class.getResourceAsStream("popup.js")) {
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
     }
 
     /** Null when the element can receive the action (or cannot be checked). */

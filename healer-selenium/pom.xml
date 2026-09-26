@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.selfhealing</groupId>
+    <artifactId>healer-parent</artifactId>
+    <version>2.0.0</version>
+  </parent>
+  <artifactId>healer-selenium</artifactId>
+  <name>Healer Selenium</name>
+  <description>Selenium WebDriver adapter and JUnit 5 extension.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.selfhealing</groupId>
+      <artifactId>healer-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.seleniumhq.selenium</groupId>
+      <artifactId>selenium-java</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <!-- Integration tests drive a real browser: installed Edge by default, -Dselenium.browser=chrome in CI -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <argLine>-Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8</argLine>
+          <systemPropertyVariables>
+            <healer.storeDir>target/it-healer</healer.storeDir>
+            <healer.reportDir>target/it-report</healer.reportDir>
+            <healer.llm.enabled>false</healer.llm.enabled>
+            <healer.report.pdf>false</healer.report.pdf>
+            <healer.probeTimeoutMs>600</healer.probeTimeoutMs>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

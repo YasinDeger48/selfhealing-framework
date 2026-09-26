@@ -110,4 +110,34 @@ class LocatorFixerTest {
         assertEquals(LocatorFixer.Status.MANUAL, plan.fixes().get(0).status());
         assertTrue(plan.patch().isEmpty());
     }
+
+    @Test
+    void seleniumByCallsAndFindByAnnotationsBecomeCss(@TempDir Path dir) throws IOException {
+        Path page = dir.resolve("src/test/java/com/acme/pages/CartPage.java");
+        Files.createDirectories(page.getParent());
+        Files.writeString(page, String.join("\n",
+                "class CartPage {",
+                "    @FindBy(id = \"coupon-code\")",
+                "    WebElement coupon;",
+                "    HealingElement apply = healer.element(\"Cart.apply\", By.id(\"apply-coupon\"));",
+                "    HealingElement total = healer.element(\"Cart.total\", By.cssSelector(\"#cart-total\"));",
+                "}", ""));
+        List<HealingEvent> events = List.of(
+                selenium(healed("Cart.apply", "#apply-coupon", "[data-testid=\"redeem-button\"]", "com/acme/pages/CartPage.java", 4, "T.a"), "apply-coupon"),
+                selenium(healed("Cart.coupon", "#coupon-code", "#promo", null, 0, "T.a"), "coupon-code"),
+                healed("Cart.total", "#cart-total", "[data-testid='total']", "com/acme/pages/CartPage.java", 5, "T.a"));
+
+        LocatorFixer.Plan plan = LocatorFixer.plan(events, config(), dir);
+        assertTrue(plan.fixes().stream().allMatch(f -> f.status() == LocatorFixer.Status.READY), plan.fixes().toString());
+        LocatorFixer.apply(plan, events, config(), dir);
+        String after = Files.readString(page);
+        assertTrue(after.contains("By.cssSelector(\"[data-testid='redeem-button']\")"), after);
+        assertTrue(after.contains("@FindBy(css = \"#promo\")"), after);
+        assertTrue(after.contains("By.cssSelector(\"[data-testid='total']\")"), after);
+    }
+
+    private static HealingEvent selenium(HealingEvent e, String literal) {
+        e.sourceLiteral = literal;
+        return e;
+    }
 }

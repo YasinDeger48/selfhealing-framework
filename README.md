@@ -13,9 +13,11 @@ project — add it as a dependency, wrap your locators, done.
 |---|---|
 | `com.selfhealing:healer-core` | Driver-independent engine: element fingerprints, local matching, healing cache, events, reports |
 | `com.selfhealing:healer-playwright` | Playwright adapter (`SelfHealingPage`, `HealingLocator`), JUnit 5 extension, HTML/PDF report |
+| `com.selfhealing:healer-selenium` | Selenium WebDriver adapter (`SelfHealingDriver`, `HealingElement`), JUnit 5 extension, HTML/PDF report |
 | `com.selfhealing:healer-claude` | Optional last healing stage backed by the Claude API — enabled by adding it to the classpath |
 
-Requirements: Java 17+, Playwright for Java, JUnit 5.
+Requirements: Java 17+, Playwright for Java **or** Selenium 4, JUnit 5. Everything below works the same with both
+adapters: healing, popups, locator quality, failure analysis, reports and code fixes.
 
 ## Getting started in your project
 
@@ -74,6 +76,30 @@ like any other - no extra code. For an iframe, scope the healer to it (the ifram
 SelfHealingPage payment = healer.frame("iframe#payment");
 payment.locator("Payment.cardNumber", "#card").fill("4111 1111 1111 1111");
 ```
+
+**Selenium instead of Playwright:** depend on `healer-selenium` and wrap your `WebDriver`. Any `By` works
+(`id`, `name`, `cssSelector`, `xpath`, `className`, `linkText` ...); healed selectors are CSS.
+
+```java
+@ExtendWith(SeleniumHealingExtension.class)
+class LoginTest {
+
+    SelfHealingDriver healer = SelfHealingDriver.wrap(driver);   // your existing WebDriver
+
+    @Test
+    void login() {
+        healer.navigate(baseUrl + "/login");
+        healer.element("LoginPage.username", By.id("username")).fill("jane");
+        healer.element("LoginPage.password", By.name("password")).fill("secret");
+        healer.element("LoginPage.submit", By.cssSelector("[data-testid='login']")).click();
+    }
+}
+```
+
+`HealingElement` finds the element again on every action (no stale references) and wraps `click`, `fill`,
+`sendKeys`, `clear`, `check`, `selectByVisibleText`, `getText` ...; `raw()` returns the `WebElement`. `fill` and `clear`
+fire the input event React, Vue and Angular listen to (plain `WebElement.clear()` does not). Code fixes rewrite
+`By.id("x")` / `@FindBy(id = "x")` to `By.cssSelector("...")` / `@FindBy(css = "...")`.
 
 **4. Run the suite once against a working build** — this records the fingerprints (`.healer/`).
 From then on, broken locators are healed. Commit `.healer/` to share the baseline with your team.
@@ -299,13 +325,13 @@ Each failed test card in the report shows the analysis; the Failed KPI shows the
 
 `mvn install` runs unit tests (engine, matching, false-positive protection, privacy masking, file merging)
 and browser integration tests on self-contained pages: renamed element, shadow DOM, iframe, removed
-look-alike (must not heal) and suggest mode. Browser: installed Edge by default, `-Dbrowser.channel=chromium`
-for Playwright's bundled Chromium (e.g. on Linux CI, after `mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install chromium"`).
+look-alike (must not heal), suggest mode, popups and the accuracy benchmark - for Playwright and for Selenium.
+Browser: installed Edge by default; `-Dbrowser.channel=chromium -Dselenium.browser=chrome` for Chromium/Chrome (as CI does).
 
 ## Example project
 
-`../shoplab-tests` is a sample test project for the ShopLab demo site. It uses this framework only
-through the Maven dependencies above — like any other project would.
+`../shoplab-tests` (Playwright) and `../shoplab-selenium-tests` (Selenium) are sample test projects for the ShopLab demo
+site. They use this framework only through the Maven dependencies above — like any other project would.
 
 ## Maven note
 

@@ -3,11 +3,14 @@
   SKIP_TAGS: new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "META", "LINK", "HEAD", "HTML", "BODY", "BR", "HR",
                       "PATH", "SVG", "G", "USE", "OPTION"]),
   MAX_CANDIDATES: 2000,
+  /** Standard CSS only (Selenium): no :text-is(), no "host >> inner" and no shadow roots. */
+  cssOnly: false,
 
   /** The document plus every open shadow root below it (Playwright's CSS engine pierces them too). */
   roots() {
     if (this._roots) return this._roots;
     const out = [document];
+    if (this.cssOnly) return (this._roots = out);
     const walk = root => {
       for (const el of root.querySelectorAll("*")) {
         if (el.shadowRoot) { out.push(el.shadowRoot); walk(el.shadowRoot); }
@@ -174,7 +177,7 @@
     }
     // Short visible text of a clickable element, when no attribute identifies it.
     const text = this.text(el);
-    if (text && text.length <= 40 && ["BUTTON", "A"].includes(el.tagName) && this.uniqueText(el, text)) {
+    if (!this.cssOnly && text && text.length <= 40 && ["BUTTON", "A"].includes(el.tagName) && this.uniqueText(el, text)) {
       return tag + ":text-is(" + this.q(text) + ")";
     }
     for (const s of tiers.generated) if (this.unique(s)) return s;
@@ -198,6 +201,7 @@
       }
     }
     if (root instanceof ShadowRoot) {
+      if (this.cssOnly) return null;
       // Inside a shadow root: "<host selector> >> <path inside the shadow root>".
       const host = this.uniqueSelector(root.host);
       const inner = segments.join(" > ");

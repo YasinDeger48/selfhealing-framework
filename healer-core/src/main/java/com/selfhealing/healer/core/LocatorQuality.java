@@ -27,6 +27,8 @@ public final class LocatorQuality {
         public String suggestion;
         public String sourceFile;
         public int sourceLine;
+        /** The selector as written in the source, if different (Selenium: "x" of By.id("x")). */
+        public String sourceLiteral;
         /** True when the selector did not match in this run (it was healed or failed). */
         public boolean broken;
         public TreeSet<String> tests = new TreeSet<>();
@@ -105,6 +107,7 @@ public final class LocatorQuality {
             h.healedSelector = e.suggestion;
             h.sourceFile = e.sourceFile;
             h.sourceLine = e.sourceLine;
+            h.sourceLiteral = e.sourceLiteral;
             h.test = e.tests.isEmpty() ? null : e.tests.first();
             out.add(h);
         }

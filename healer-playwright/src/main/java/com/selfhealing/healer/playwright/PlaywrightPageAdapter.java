@@ -10,10 +10,6 @@ import com.selfhealing.healer.core.ElementSnapshot;
 import com.selfhealing.healer.core.Json;
 import com.selfhealing.healer.core.PageAdapter;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
@@ -22,7 +18,7 @@ import java.util.List;
  */
 class PlaywrightPageAdapter implements PageAdapter {
 
-    static final String LIB = loadLib();
+    static final String LIB = com.selfhealing.healer.core.BrowserScripts.HEALER;
     private static final TypeReference<List<ElementSnapshot>> LIST = new TypeReference<>() { };
 
     private final Page page;
@@ -36,15 +32,6 @@ class PlaywrightPageAdapter implements PageAdapter {
     PlaywrightPageAdapter(Page page, String frameSelector) {
         this.page = page;
         this.frameSelector = frameSelector;
-    }
-
-    private static String loadLib() {
-        try (InputStream in = PlaywrightPageAdapter.class.getResourceAsStream("healer.js")) {
-            if (in == null) throw new IllegalStateException("healer.js missing from classpath");
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
     }
 
     Page page() {
