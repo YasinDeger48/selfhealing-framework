@@ -1,0 +1,37 @@
+name: Release to Maven Central
+
+# Push a tag that matches the version in pom.xml, e.g.:  git tag v2.0.0 && git push origin v2.0.0
+# Needs four repository secrets (see RELEASING.md): CENTRAL_TOKEN_USERNAME, CENTRAL_TOKEN_PASSWORD,
+# GPG_PRIVATE_KEY, GPG_PASSPHRASE.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+
+      - name: Tag must match the project version
+        run: |
+          VERSION=$(mvn -B -q help:evaluate -Dexpression=project.version -DforceStdout)
+          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match project version $VERSION"; exit 1
+          fi
+
+      # Tests ran in CI for the tagged commit; this job only builds, signs and uploads.
+      - name: Build, sign and upload
+        run: mvn -B -Prelease -DskipTests deploy
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}

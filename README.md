@@ -11,17 +11,17 @@ project — add it as a dependency, wrap your locators, done.
 
 | Artifact | What it is |
 |---|---|
-| `com.selfhealing:healer-core` | Driver-independent engine: element fingerprints, local matching, healing cache, events, reports |
-| `com.selfhealing:healer-playwright` | Playwright adapter (`SelfHealingPage`, `HealingLocator`), JUnit 5 extension, HTML/PDF report |
-| `com.selfhealing:healer-selenium` | Selenium WebDriver adapter (`SelfHealingDriver`, `HealingElement`), JUnit 5 extension, HTML/PDF report |
-| `com.selfhealing:healer-claude` | Optional last healing stage backed by the Claude API — enabled by adding it to the classpath |
+| `io.github.yasindeger48:healer-core` | Driver-independent engine: element fingerprints, local matching, healing cache, events, reports |
+| `io.github.yasindeger48:healer-playwright` | Playwright adapter (`SelfHealingPage`, `HealingLocator`), JUnit 5 extension, HTML/PDF report |
+| `io.github.yasindeger48:healer-selenium` | Selenium WebDriver adapter (`SelfHealingDriver`, `HealingElement`), JUnit 5 extension, HTML/PDF report |
+| `io.github.yasindeger48:healer-claude` | Optional last healing stage backed by the Claude API — enabled by adding it to the classpath |
 
 Requirements: Java 17+, Playwright for Java **or** Selenium 4, JUnit 5. Everything below works the same with both
 adapters: healing, popups, locator quality, failure analysis, reports and code fixes.
 
 ## Getting started in your project
 
-**1. Build and install the framework** (until it is published to a Maven repository):
+**1. Build and install the framework** (not needed once it is on Maven Central - see [RELEASING.md](RELEASING.md)):
 
 ```bash
 cd healing-framework
@@ -32,14 +32,14 @@ mvn install
 
 ```xml
 <dependency>
-  <groupId>com.selfhealing</groupId>
+  <groupId>io.github.yasindeger48</groupId>
   <artifactId>healer-playwright</artifactId>
   <version>2.0.0</version>
   <scope>test</scope>
 </dependency>
 <!-- optional: Claude stage -->
 <dependency>
-  <groupId>com.selfhealing</groupId>
+  <groupId>io.github.yasindeger48</groupId>
   <artifactId>healer-claude</artifactId>
   <version>2.0.0</version>
   <scope>test</scope>
@@ -337,3 +337,7 @@ site. They use this framework only through the Maven dependencies above — like
 
 `.mvn/maven.config` resolves dependencies from Maven Central directly (a corporate mirror configured in
 `~/.m2/settings.xml` may be reachable only on VPN). Delete it to use your global settings.
+
+## License
+
+Apache License 2.0 - see [LICENSE](LICENSE) and [NOTICE](NOTICE).

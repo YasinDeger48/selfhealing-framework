@@ -12,4 +12,12 @@
       <mirrorOf>*</mirrorOf>
     </mirror>
   </mirrors>
+  <servers>
+    <!-- Maven Central Portal token for releases (mvn -Prelease deploy); values come from the environment, never from files -->
+    <server>
+      <id>central</id>
+      <username>${env.CENTRAL_TOKEN_USERNAME}</username>
+      <password>${env.CENTRAL_TOKEN_PASSWORD}</password>
+    </server>
+  </servers>
 </settings>
