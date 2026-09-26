@@ -18,9 +18,13 @@ jobs:
           java-version: "17"
           cache: maven
 
-      # System libraries for Chromium; Playwright for Java downloads the matching browser itself on first use.
-      - name: Install browser dependencies
-        run: npx --yes playwright install-deps chromium
+      # The tests skip browser downloads (locally they use the installed Edge), so Chromium and its system
+      # libraries are installed here with the Playwright CLI of the exact Playwright version in use.
+      - name: Install Chromium
+        run: |
+          mvn -B -q install -DskipTests
+          mvn -B -q -pl healer-playwright exec:java -Dexec.mainClass=com.microsoft.playwright.CLI \
+              -Dexec.args="install --with-deps chromium" -Dexec.classpathScope=test
 
       # Unit tests, browser integration tests and the accuracy benchmark (fails on any wrong heal
       # or on accuracy below the thresholds in HealingBenchmarkTest). No API key: Claude is not called.
