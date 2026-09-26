@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.selfhealing</groupId>
+    <artifactId>healer-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>healer-playwright</artifactId>
+  <name>Healer Playwright</name>
+  <description>Playwright for Java adapter and JUnit 5 extension.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.selfhealing</groupId>
+      <artifactId>healer-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.microsoft.playwright</groupId>
+      <artifactId>playwright</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <!-- Integration tests run a real browser (installed Edge by default: -Dbrowser.channel=chromium for the bundled one) -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <argLine>-Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8</argLine>
+          <systemPropertyVariables>
+            <healer.storeDir>target/it-healer</healer.storeDir>
+            <healer.reportDir>target/it-report</healer.reportDir>
+            <healer.llm.enabled>false</healer.llm.enabled>
+            <healer.report.pdf>false</healer.report.pdf>
+            <healer.probeTimeoutMs>600</healer.probeTimeoutMs>
+          </systemPropertyVariables>
+          <environmentVariables>
+            <PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD>1</PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD>
+          </environmentVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

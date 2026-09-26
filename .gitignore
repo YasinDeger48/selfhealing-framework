@@ -1,0 +1,6 @@
+target/
+*.iml
+.idea/
+.healer/
+# report copies saved from the browser
+/*.pdf

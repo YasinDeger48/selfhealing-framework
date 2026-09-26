@@ -1,0 +1,96 @@
+package com.selfhealing.healer.core;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.Properties;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class HealingEngineTest {
+
+    /** In-memory page: selectors are "#id". */
+    static class FakePage implements PageAdapter {
+        final List<ElementSnapshot> elements = new ArrayList<>();
+
+        @Override public String url() { return "http://test/page"; }
+        @Override public List<ElementSnapshot> collectCandidates() { return elements; }
+        @Override public int count(String selector) {
+            return (int) elements.stream().filter(e -> selector.equals(e.getSelector())).count();
+        }
+        @Override public ElementSnapshot snapshot(String selector) {
+            return elements.stream().filter(e -> selector.equals(e.getSelector())).findFirst().orElse(null);
+        }
+    }
+
+    private static HealingEngine engine(Path dir, boolean llm, LocatorHealer healer) {
+        Properties p = new Properties();
+        p.setProperty("healer.storeDir", dir.toString());
+        p.setProperty("healer.llm.enabled", String.valueOf(llm));
+        return new HealingEngine(HealerConfig.from(p), healer);
+    }
+
+    private static ElementSnapshot username(String id, String testId) {
+        return HeuristicMatcherTest.el("input", "", List.of("form#login-form"),
+                "id", id, "data-testid", testId, "name", "username", "placeholder", "Kullanıcı adınızı girin", "type", "text");
+    }
+
+    @Test
+    void healsRenamedElementAndCachesIt(@TempDir Path dir) {
+        HealingEngine engine = engine(dir, false, null);
+        engine.remember("Login.username", "#login-username", "/login", username("login-username", "login-username-input"));
+
+        FakePage page = new FakePage();
+        page.elements.add(username("user-name", "username-input"));
+        page.elements.add(HeuristicMatcherTest.el("button", "Giriş Yap", List.of("form#login-form"), "id", "login-button"));
+
+        HealingEngine.Result first = engine.heal("Login.username", "#login-username", page);
+        assertTrue(first.healed());
+        assertEquals("#user-name", first.suggestion().selector());
+        assertEquals(HealingSuggestion.Source.HEURISTIC, first.suggestion().source());
+
+        // A new engine reads the persisted cache.
+        HealingEngine.Result second = engine(dir, false, null).heal("Login.username", "#login-username", page);
+        assertEquals(HealingSuggestion.Source.CACHE, second.suggestion().source());
+    }
+
+    @Test
+    void refusesWhenNothingIsSimilarEnough(@TempDir Path dir) {
+        HealingEngine engine = engine(dir, false, null);
+        engine.remember("Login.username", "#login-username", "/login", username("login-username", "login-username-input"));
+
+        FakePage page = new FakePage();
+        page.elements.add(HeuristicMatcherTest.el("a", "İletişim", List.of("nav"), "id", "nav-contact", "href", "/contact"));
+
+        HealingEngine.Result result = engine.heal("Login.username", "#login-username", page);
+        assertFalse(result.healed());
+        assertTrue(result.failureReason().contains("LLM healer disabled"));
+    }
+
+    @Test
+    void fallsBackToLlmAndValidatesItsAnswer(@TempDir Path dir) {
+        FakePage page = new FakePage();
+        ElementSnapshot target = HeuristicMatcherTest.el("input", "", List.of("div"), "id", "x-42", "type", "text");
+        page.elements.add(target);
+
+        LocatorHealer llm = request -> new LocatorHealer.Answer(Optional.of(new HealingSuggestion("#x-42",
+                HealingSuggestion.Source.LLM, 0.9, "only text input on the page", null, null)), null, java.util.Map.of());
+        HealingEngine engine = engine(dir, true, llm);
+        engine.remember("Login.username", "#login-username", "/login", username("login-username", "login-username-input"));
+
+        HealingEngine.Result result = engine.heal("Login.username", "#login-username", page);
+        assertEquals(HealingSuggestion.Source.LLM, result.suggestion().source());
+
+        LocatorHealer wrong = request -> new LocatorHealer.Answer(Optional.of(new HealingSuggestion("#does-not-exist",
+                HealingSuggestion.Source.LLM, 0.99, "hallucinated", null, null)), null, java.util.Map.of());
+        HealingEngine strict = engine(dir.resolve("other"), true, wrong);
+        strict.remember("Login.username", "#login-username", "/login", username("login-username", "login-username-input"));
+        assertFalse(strict.heal("Login.username", "#login-username", page).healed(), "unvalidated selector must be rejected");
+    }
+}

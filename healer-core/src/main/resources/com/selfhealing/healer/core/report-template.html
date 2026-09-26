@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test Automation Report</title>
+<style>
+  :root {
+    --bg: #f4f6fb; --surface: #ffffff; --surface-2: #f8f9fc; --border: #e4e7ef; --text: #1d2433; --muted: #6b7385;
+    --primary: #4263eb; --green: #2b8a3e; --green-bg: #ebfbee; --amber: #e67700; --amber-bg: #fff4e6;
+    --red: #c92a2a; --red-bg: #fff5f5; --purple: #6741d9; --purple-bg: #f3f0ff; --blue-bg: #edf2ff;
+    --mono: "Cascadia Code", Consolas, "SFMono-Regular", Menlo, monospace;
+    --radius: 12px; --shadow: 0 1px 2px rgba(16,24,40,.05), 0 4px 16px rgba(16,24,40,.06);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.55 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  code, .mono { font-family: var(--mono); font-size: 12.5px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px 60px; }
+
+  /* Header */
+  header.hero { background: linear-gradient(135deg, #1e2a4a 0%, #2f3f73 60%, #4263eb 130%); color: #fff; padding: 34px 0 90px; }
+  .hero .wrap { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; flex-wrap: wrap; padding-bottom: 0; }
+  .hero h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -.3px; }
+  .hero .meta { color: #c5cff5; font-size: 13.5px; display: flex; gap: 18px; flex-wrap: wrap; }
+  .hero .actions { display: flex; gap: 10px; }
+  .btn { border: 1px solid rgba(255,255,255,.35); background: rgba(255,255,255,.12); color: #fff; padding: 9px 14px; border-radius: 8px;
+         font: 600 13px "Segoe UI", sans-serif; cursor: pointer; }
+  .btn:hover { background: rgba(255,255,255,.22); }
+  .btn.solid { background: #fff; color: #1e2a4a; border-color: #fff; }
+
+  /* KPI */
+  .kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-top: -62px; }
+  .kpi { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px 16px 14px; border: 1px solid var(--border); }
+  .kpi .label { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+  .kpi .value { font-size: 28px; font-weight: 700; margin-top: 4px; letter-spacing: -.5px; }
+  .kpi .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .kpi.green .value { color: var(--green); } .kpi.amber .value { color: var(--amber); } .kpi.red .value { color: var(--red); }
+  .kpi.purple .value { color: var(--purple); }
+  .bar { display: flex; height: 6px; border-radius: 4px; overflow: hidden; background: var(--border); margin-top: 10px; }
+  .bar span { display: block; height: 100%; }
+
+  /* Sections */
+  section { margin-top: 30px; }
+  h2 { font-size: 18px; margin: 0 0 12px; display: flex; align-items: center; gap: 10px; }
+  h2 .count { background: var(--blue-bg); color: var(--primary); font-size: 12px; padding: 2px 9px; border-radius: 20px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .note { color: var(--muted); font-size: 13px; margin: -4px 0 12px; }
+
+  /* Review table */
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); font-weight: 600;
+       padding: 11px 14px; background: var(--surface-2); border-bottom: 1px solid var(--border); }
+  td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .sel-old { color: var(--red); text-decoration: line-through; text-decoration-color: rgba(201,42,42,.4); }
+  .sel-new { color: var(--green); }
+  .fix { background: #1e2433; color: #e6edf3; padding: 8px 10px; border-radius: 8px; white-space: pre-wrap; word-break: break-all; margin-top: 6px; }
+  .fix .k { color: #ffa657; } .fix .s { color: #7ee787; }
+
+  /* Pills */
+  .pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .pill.pass { background: var(--green-bg); color: var(--green); }
+  .pill.warn { background: var(--amber-bg); color: var(--amber); }
+  .pill.fail { background: var(--red-bg); color: var(--red); }
+  .pill.local { background: var(--blue-bg); color: var(--primary); }
+  .pill.cache { background: #e6fcf5; color: #087f5b; }
+  .pill.llm { background: var(--purple-bg); color: var(--purple); }
+  .pill.cost { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); font-family: var(--mono); }
+  .pill.cost.paid { background: var(--purple-bg); color: var(--purple); border-color: #d0bfff; }
+
+  /* Filters */
+  .filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .chip { border: 1px solid var(--border); background: var(--surface); padding: 6px 12px; border-radius: 20px; cursor: pointer; font: 600 12.5px "Segoe UI", sans-serif; color: var(--muted); }
+  .chip.active { background: var(--text); color: #fff; border-color: var(--text); }
+
+  /* Test cards */
+  details.test { margin-bottom: 12px; overflow: hidden; }
+  details.test > summary { list-style: none; cursor: pointer; padding: 14px 18px; display: grid;
+       grid-template-columns: auto 1fr auto auto auto; gap: 14px; align-items: center; }
+  details.test > summary::-webkit-details-marker { display: none; }
+  details.test > summary:hover { background: var(--surface-2); }
+  .tname { font-weight: 600; } .tname .cls { color: var(--muted); font-weight: 500; }
+  .tmeta { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .chev { transition: transform .15s; color: var(--muted); }
+  details[open] .chev { transform: rotate(90deg); }
+  .tbody { border-top: 1px solid var(--border); padding: 6px 18px 18px; }
+  .error { background: var(--red-bg); color: var(--red); border: 1px solid #ffc9c9; border-radius: 8px; padding: 10px 12px; margin: 12px 0; white-space: pre-wrap; font-family: var(--mono); font-size: 12.5px; }
+
+  /* Steps */
+  .steps { margin: 8px 0 0; }
+  .step { display: grid; grid-template-columns: 34px 62px 110px 1fr auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px dashed var(--border); }
+  .step:last-child { border-bottom: none; }
+  .step .n { width: 24px; height: 24px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); display: grid; place-items: center; font-size: 11.5px; color: var(--muted); font-weight: 600; }
+  .step.healed .n { background: var(--amber-bg); border-color: #ffd8a8; color: var(--amber); }
+  .step.failed .n { background: var(--red-bg); border-color: #ffc9c9; color: var(--red); }
+  .step .t { color: var(--muted); font-size: 12px; font-family: var(--mono); }
+  .step .act { font-weight: 600; font-size: 13px; }
+  .step .el { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .step .el .d { color: var(--muted); }
+
+  /* Heal panel */
+  .heal { margin: 4px 0 10px 44px; border: 1px solid #ffd8a8; background: linear-gradient(180deg, #fffaf3, #fff); border-radius: 10px; }
+  details.heal > summary { list-style: none; cursor: pointer; padding: 10px 14px; }
+  details.heal > summary::-webkit-details-marker { display: none; }
+  details.heal > summary .more { margin-left: auto; color: var(--primary); font-size: 12.5px; font-weight: 600; }
+  details.heal[open] > summary .more::after { content: " ▾"; } details.heal:not([open]) > summary .more::after { content: " ▸"; }
+  details.heal[open] > summary { border-bottom: 1px solid #ffe8cc; }
+  .heal-body { padding: 14px; }
+  .heal.suggested { border-color: #d0bfff; background: linear-gradient(180deg, #f8f5ff, #fff); }
+  .heal.reused { border-color: var(--border); background: var(--surface-2); padding: 10px 14px; color: var(--muted); font-size: 13px; }
+  .heal-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .heal-head .title { font-weight: 700; margin-right: 6px; }
+  .heal-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 14px; }
+  .trace { background: #111827; color: #e5e7eb; border-radius: 10px; padding: 12px 14px; font-family: var(--mono); font-size: 12px; line-height: 1.6; overflow: auto; }
+  .trace .title { color: #fff; font-weight: 700; } .trace .error { all: unset; color: #ff8787; display: block; }
+  .trace div { white-space: pre-wrap; word-break: break-word; }
+  .trace .info { color: #e5e7eb; } .trace .candidate { color: #ffc078; } .trace .detail { color: #9ca3af; }
+  .trace .ok { color: #8ce99a; } .trace .warn { color: #ffc078; } .trace .llm { color: #b197fc; } .trace .quote { color: #d0bfff; font-style: italic; }
+  .shot { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--surface-2); cursor: zoom-in; align-self: start; }
+  .shot.empty { cursor: default; display: grid; place-items: center; color: var(--muted); min-height: 120px; }
+  .shot img { display: block; width: 100%; }
+  .shot .cap { font-size: 12px; color: var(--muted); padding: 6px 10px; border-top: 1px solid var(--border); background: #fff; }
+  .subgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+  .box { border: 1px solid var(--border); border-radius: 10px; background: #fff; overflow: hidden; }
+  .box h4 { margin: 0; padding: 9px 12px; font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); background: var(--surface-2); border-bottom: 1px solid var(--border); }
+  .box table td, .box table th { padding: 7px 12px; font-size: 12.5px; }
+  .box .old { color: var(--red); } .box .new { color: var(--green); }
+  .cand { display: grid; grid-template-columns: 22px 44px 1fr; gap: 8px; align-items: center; padding: 7px 12px; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+  .cand:last-child { border-bottom: none; }
+  .cand .sbar { height: 6px; border-radius: 3px; background: var(--border); position: relative; overflow: hidden; }
+  .cand .sbar i { position: absolute; inset: 0 auto 0 0; background: var(--amber); }
+  .cand.win .sbar i { background: var(--green); }
+  .reason { margin-top: 14px; background: var(--purple-bg); border-left: 3px solid var(--purple); padding: 10px 12px; border-radius: 6px; color: #3b2a7a; }
+  .reason b { color: var(--purple); }
+
+  /* Lightbox */
+  #lightbox { position: fixed; inset: 0; background: rgba(10,14,25,.85); display: none; align-items: center; justify-content: center; z-index: 50; cursor: zoom-out; padding: 30px; }
+  #lightbox.open { display: flex; } #lightbox img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+
+  footer { color: var(--muted); font-size: 12.5px; text-align: center; margin-top: 40px; }
+  .empty { padding: 26px; text-align: center; color: var(--muted); }
+
+  @media (max-width: 900px) {
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .heal-grid, .subgrid { grid-template-columns: 1fr; }
+    .step { grid-template-columns: 30px 1fr auto; } .step .t, .step .act { display: none; }
+    details.test > summary { grid-template-columns: auto 1fr auto; } .tmeta.hide-sm { display: none; }
+  }
+
+  @media print {
+    @page { size: A4; margin: 12mm 10mm; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { background: #fff; font-size: 12px; zoom: .72; }
+    .hero { padding: 20px 0 70px; }
+    .actions, .filters, .chev { display: none !important; }
+    .kpis { grid-template-columns: repeat(6, 1fr); }
+    .card, .kpi { box-shadow: none; }
+    details.test { break-inside: auto; }
+    .kpi, tr, .box, .trace, .shot { break-inside: avoid; }
+    details.heal > summary .more { display: none; }
+    .heal-grid { grid-template-columns: 1.2fr .8fr !important; }
+    .subgrid { grid-template-columns: 1fr 1fr !important; }
+    details.test > summary { break-after: avoid; }
+    .test[hidden] { display: block !important; }
+    .wrap { max-width: none; padding: 0 4mm; }
+  }
+
+  /* Language picker, collapsible sections, RTL */
+  .hero .subtitle { color: #aab8f0; font-size: 13.5px; margin: -2px 0 8px; letter-spacing: .2px; }
+  .lang-picker { display: flex; align-items: center; gap: 8px; color: #c5cff5; font-size: 12.5px; font-weight: 600; }
+  .lang-picker select { background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.35); border-radius: 8px;
+                        padding: 8px 10px; font: 600 13px "Segoe UI", sans-serif; cursor: pointer; }
+  .lang-picker select option { color: #1d2433; }
+  details.section { margin-top: 30px; }
+  details.section > summary { list-style: none; cursor: pointer; }
+  details.section > summary::-webkit-details-marker { display: none; }
+  details.section > summary h2 { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+                                 box-shadow: var(--shadow); padding: 14px 18px; margin: 0; }
+  details.section > summary:hover h2 { background: var(--surface-2); }
+  details.section[open] > summary h2 { margin-bottom: 14px; }
+  details.section[open] > summary .chev, details.test[open] .chev { transform: rotate(90deg); }
+  details.section .chev { display: inline-block; transition: transform .15s; color: var(--muted); font-size: 13px; }
+  .reason-note { margin-top: 6px; font-size: 12px; color: var(--muted); font-style: italic; }
+  [dir="rtl"] body { font-family: "Segoe UI", Tahoma, "Noto Sans Arabic", sans-serif; }
+  [dir="rtl"] th { text-align: right; }
+  [dir="rtl"] .heal { margin: 4px 44px 10px 0; }
+  [dir="rtl"] .reason { border-left: none; border-right: 3px solid var(--purple); }
+  [dir="rtl"] details.section .chev, [dir="rtl"] details.test .chev { transform: scaleX(-1); }
+  [dir="rtl"] details.section[open] > summary .chev, [dir="rtl"] details.test[open] .chev { transform: rotate(90deg); }
+  @media print { .lang-picker { display: none !important; } details.section > summary h2 { box-shadow: none; } }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div>
+      <h1 id="title"></h1>
+      <div class="subtitle" id="subtitle"></div>
+      <div class="meta" id="meta"></div>
+    </div>
+    <div class="actions">
+      <label class="lang-picker"><span id="langLabel"></span>
+        <select id="langSelect" aria-label="Language"></select>
+      </label>
+      <button class="btn" id="toggleAll"></button>
+      <button class="btn solid" id="savePdf" onclick="window.print()"></button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="kpis" id="kpis"></div>
+
+  <details class="section" id="reviewSection">
+    <summary><h2><span class="chev">&#9656;</span><span id="reviewTitle"></span> <span class="count" id="reviewCount"></span></h2></summary>
+    <p class="note" id="reviewNote"></p>
+    <div class="card" id="review"></div>
+  </details>
+
+  <details class="section" id="testsSection">
+    <summary><h2><span class="chev">&#9656;</span><span id="testsTitle"></span> <span class="count" id="testCount"></span></h2></summary>
+    <div class="filters" id="filters"></div>
+    <div id="tests"></div>
+  </details>
+
+  <footer id="footer"></footer>
+</div>
+
+<div id="lightbox"><img alt=""></div>
+
+<script>
+const R = /*__REPORT_DATA__*/null;
+const I18N = R.i18n || { default: "en", languages: ["en"], labels: { en: R.labels || {} } };
+let lang = I18N.labels[I18N.default] ? I18N.default : "en";
+let filter = "all";
+
+/** Report label with {0}, {1} placeholders, in the selected language (English fallback). */
+const L = (key, ...args) => {
+  const text = (I18N.labels[lang] || {})[key] ?? (I18N.labels.en || {})[key] ?? key;
+  return text.replace(/\{(\d+)\}/g, (m, i) => args[i] ?? m);
+};
+/** Java-style message (%s, %d, %,d, %.2f) used by the healing trace; nested {key, args} are resolved too. */
+const T = (key, args) => {
+  const pattern = (I18N.labels[lang] || {})[key] ?? (I18N.labels.en || {})[key] ?? key;
+  let i = 0;
+  return pattern.replace(/%(,)?(?:\.(\d+))?([sdf%])/g, (m, comma, prec, type) => {
+    if (type === "%") return "%";
+    let v = (args || [])[i++];
+    if (v && typeof v === "object" && v.key) return T(v.key, v.args);
+    if (v === null || v === undefined) return "";
+    if (type === "f") return Number(v).toFixed(prec ? +prec : 6);
+    if (type === "d") return comma ? Math.round(v).toLocaleString("en-US") : String(Math.round(v));
+    return String(v);
+  });
+};
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const usd = v => "$" + (v || 0).toFixed(4);
+const dur = ms => ms >= 60000 ? Math.floor(ms / 60000) + " " + L("min") + " " + Math.round((ms % 60000) / 1000) + " " + L("sec")
+                              : (ms / 1000).toFixed(1) + " " + L("sec");
+const fmtDate = iso => new Date(iso).toLocaleString(L("locale"), { dateStyle: "medium", timeStyle: "short" });
+const sourceClass = { HEURISTIC: "local", CACHE: "cache", LLM: "llm" };
+const srcLabel = s => L("src." + s);
+
+const events = R.events || [];
+const byId = Object.fromEntries(events.map(e => [e.id, e]));
+const tests = (R.tests || []).map(t => {
+  const ev = events.filter(e => e.test === t.id);
+  return { ...t, events: ev, healed: ev.filter(e => e.status === "HEALED"), cost: ev.reduce((a, e) => a + (e.llmCostUsd || 0), 0) };
+});
+const kind = t => t.status === "FAILED" ? "fail" : (t.healed.length ? "warn" : "pass");
+
+function sourcePill(e) {
+  if (!e.source) return "";
+  const reused = e.reused ? " · " + L("reusedTag") : "";
+  return `<span class="pill ${sourceClass[e.source]}">${srcLabel(e.source)}${reused}</span>`;
+}
+function costPill(v) {
+  return `<span class="pill cost ${v > 0 ? "paid" : ""}">${usd(v)}</span>`;
+}
+function statusPill(t) {
+  const k = kind(t);
+  const icon = { pass: "&#10004;", warn: "&#9888;", fail: "&#10006;" }[k];
+  return `<span class="pill ${k}">${icon} ${L("status." + k)}</span>`;
+}
+
+function renderStatic() {
+  document.documentElement.lang = L("lang");
+  document.documentElement.dir = L("dir");
+  document.title = L("title");
+  document.getElementById("title").textContent = L("title");
+  document.getElementById("subtitle").textContent = L("subtitle");
+  document.getElementById("langLabel").textContent = L("language");
+  document.getElementById("toggleAll").textContent = allOpen ? L("collapseAll") : L("expandAll");
+  document.getElementById("savePdf").textContent = L("savePdf");
+  document.getElementById("reviewTitle").textContent = L("review");
+  document.getElementById("reviewNote").textContent = L("reviewNote");
+  document.getElementById("testsTitle").textContent = L("tests");
+  document.getElementById("footer").textContent = L("footer", fmtDate(R.generatedAt));
+}
+
+function renderLanguageMenu() {
+  const sel = document.getElementById("langSelect");
+  sel.innerHTML = (I18N.languages || ["en"]).map(code =>
+    `<option value="${code}" ${code === lang ? "selected" : ""}>${esc((I18N.labels[code] || {}).langName || code)}</option>`).join("");
+  sel.addEventListener("change", () => { lang = sel.value; renderAll(); });
+}
+
+function renderMeta() {
+  const s = R.settings || {};
+  const llm = s.llmEnabled ? L("llm", esc(s.llmModel) + (s.llmEscalateTo ? " → " + esc(s.llmEscalateTo) : "")) : L("llmOff");
+  document.getElementById("meta").innerHTML =
+    `<span>&#128197; ${fmtDate(R.runStartedAt)}</span><span>&#9201; ${dur(R.runDurationMs)}</span>` +
+    `<span>${L("mode", esc(s.mode))}</span><span>${L("threshold", s.minConfidence)}</span><span>${llm}</span>`;
+}
+
+function renderKpis() {
+  const S = R.summary, n = S.tests || 0;
+  const warn = tests.filter(t => kind(t) === "warn").length;
+  const pass = tests.filter(t => kind(t) === "pass").length;
+  const fail = tests.filter(t => kind(t) === "fail").length;
+  const src = S.bySource || {};
+  const pct = v => n ? (v / n * 100) + "%" : "0";
+  const tokens = ((S.llmInputTokens || 0) + (S.llmOutputTokens || 0)).toLocaleString(L("locale"));
+  const cards = [
+    [L("kpi.tests"), n, L("kpi.totalTime", dur(R.runDurationMs)), "",
+      `<div class="bar"><span style="width:${pct(pass)};background:var(--green)"></span><span style="width:${pct(warn)};background:var(--amber)"></span><span style="width:${pct(fail)};background:var(--red)"></span></div>`],
+    [L("kpi.clean"), pass, L("kpi.cleanSub"), "green", ""],
+    [L("kpi.warn"), warn, L("kpi.warnSub"), "amber", ""],
+    [L("kpi.failed"), fail, S.healFailed ? L("kpi.failedSub", S.healFailed) : L("kpi.failedNone"), "red", ""],
+    [L("kpi.heals"), (src.HEURISTIC || 0) + (src.CACHE || 0) + (src.LLM || 0),
+      L("kpi.healsSub", src.HEURISTIC || 0, src.CACHE || 0, src.LLM || 0), "", ""],
+    [L("kpi.cost"), usd(S.llmCostUsd), L("kpi.costSub", S.llmCalls || 0, tokens), "purple", ""]
+  ];
+  document.getElementById("kpis").innerHTML = cards.map(([l, v, sub, cls, extra]) =>
+    `<div class="kpi ${cls}"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${sub}</div>${extra}</div>`).join("");
+}
+
+function fixSnippet(e) {
+  return `<div class="fix mono" dir="ltr"><span class="k">healer.locator</span>("${esc(e.key)}", <span class="s">"${esc(e.healedSelector)}"</span>)</div>`;
+}
+
+function renderReview() {
+  const unique = new Map();
+  events.filter(e => e.status !== "FAILED").forEach(e => {
+    const u = unique.get(e.key) || { first: null, tests: new Set(), cost: 0 };
+    if (!u.first || (u.first.reused && !e.reused)) u.first = e;
+    u.tests.add(e.test); u.cost += e.llmCostUsd || 0;
+    unique.set(e.key, u);
+  });
+  const failed = events.filter(e => e.status === "FAILED");
+  document.getElementById("reviewCount").textContent = unique.size + failed.length;
+  if (!unique.size && !failed.length) {
+    document.getElementById("review").innerHTML = `<div class="empty">&#127881; ${L("reviewEmpty")}</div>`;
+    return;
+  }
+  const rows = [...unique.entries()].map(([key, u]) => {
+    const e = u.first;
+    return `<tr><td><b>${esc(key)}</b><div class="tmeta">${L("inTests", u.tests.size)}</div></td>
+      <td><div class="mono sel-old" dir="ltr">${esc(e.originalSelector)}</div><div class="mono sel-new" dir="ltr">&#8594; ${esc(e.healedSelector)}</div>${fixSnippet(e)}</td>
+      <td>${sourcePill({ ...e, reused: false })}</td><td class="mono">${(e.confidence || 0).toFixed(2)}</td><td>${costPill(u.cost)}</td></tr>`;
+  }).join("");
+  const failRows = failed.map(e => `<tr><td><b>${esc(e.key)}</b><div class="tmeta">${esc(e.test)}</div></td>
+      <td colspan="4"><div class="mono sel-old" dir="ltr">${esc(e.originalSelector)}</div><div class="error">${esc(e.reasoning)}</div></td></tr>`).join("");
+  document.getElementById("review").innerHTML =
+    `<table><thead><tr><th style="width:24%">${L("col.element")}</th><th>${L("col.selectors")}</th><th>${L("col.source")}</th><th>${L("col.confidence")}</th><th>${L("col.cost")}</th></tr></thead><tbody>${rows}${failRows}</tbody></table>`;
+}
+
+function traceLine(l) {
+  return `<div class="${esc(l.kind)}">${esc(l.key ? T(l.key, l.args) : l.text)}</div>`;
+}
+
+function renderHeal(e) {
+  if (e.reused) {
+    return `<div class="heal reused">&#8635; ${L("healReused", "<b>" + esc(e.key) + "</b>", srcLabel(e.source))}
+      <span class="mono" dir="ltr">${esc(e.healedSelector)}</span> · ${costPill(0)}</div>`;
+  }
+  const cost = e.llmCostUsd || 0;
+  const costNote = e.llmModel ? `${L("tokens", (e.llmInputTokens + e.llmOutputTokens).toLocaleString(L("locale")))} · ${esc(e.llmModel)}` :
+                   e.source === "CACHE" ? L("costCache") : L("costLocal");
+  const trace = (e.trace || []).map(traceLine).join("");
+  const shot = e.screenshot ? `<div class="shot" data-src="${e.screenshot}"><img src="${e.screenshot}" alt=""><div class="cap">${L("shotCaption")}</div></div>` : "";
+  const changes = Object.entries(e.changes || {});
+  const diff = changes.length ? `<div class="box"><h4>${L("changes")}</h4><table><thead><tr><th>${L("attr")}</th><th>${L("old")}</th><th>${L("new")}</th></tr></thead><tbody>${
+      changes.map(([k, v]) => `<tr><td class="mono">${esc(k)}</td><td class="mono old">${esc(v[0]) || "<i>—</i>"}</td><td class="mono new">${esc(v[1]) || "<i>—</i>"}</td></tr>`).join("")
+    }</tbody></table></div>` : "";
+  const cands = (e.candidates || []).length ? `<div class="box"><h4>${L("candidates")}</h4>${
+      e.candidates.map((c, i) => `<div class="cand ${c.selector === e.healedSelector ? "win" : ""}"><b>#${i + 1}</b>
+        <div class="sbar"><i style="width:${Math.round(c.score * 100)}%"></i></div><div><span class="mono">${c.score.toFixed(2)}</span> ${esc(c.element)}</div></div>`).join("")
+    }</div>` : "";
+  const runLang = (R.settings || {}).language || "en";
+  const note = runLang !== lang ? `<div class="reason-note">${L("reasoningNote")}</div>` : "";
+  const reason = e.source === "LLM" && e.reasoning ? `<div class="reason"><b>${L("reasoning")}</b> ${esc(e.reasoning)}${note}</div>` : "";
+  const failed = e.status === "FAILED";
+  const suggested = e.status === "SUGGESTED";
+  const title = failed ? "&#10060; " + L("healFailed", esc(e.key))
+              : suggested ? "&#128161; " + L("healSuggested", esc(e.key))
+              : "&#9888; " + L("healed", esc(e.key));
+  return `<details class="heal${suggested ? " suggested" : ""}" data-id="h${e.id}" ${failed || suggested ? "open" : ""}>
+    <summary class="heal-head"><span class="title">${title}</span>${sourcePill(e)}
+      <span class="pill cost ${cost > 0 ? "paid" : ""}">${usd(cost)} · ${costNote}</span>
+      ${failed ? "" : `<span class="pill cost">${L("confidence", (e.confidence || 0).toFixed(2))}</span>`}
+      <span class="pill cost">${L("timing", dur(e.probeWaitMs || 0), dur(e.healDurationMs || 0))}</span>
+      <span class="more">${L("healSteps")}</span></summary>
+    <div class="heal-body">
+      <div class="heal-grid"><div class="trace" dir="ltr">${trace}</div>${shot || `<div class="shot empty">${L("noShot")}</div>`}</div>
+      ${reason}
+      <div class="subgrid">${diff}${cands}</div>
+      ${failed ? "" : `<div style="margin-top:12px"><div class="tmeta">${L("fix")}</div>${fixSnippet(e)}</div>`}
+    </div>
+  </details>`;
+}
+
+function renderTests() {
+  // keep the user's open/closed choices across re-renders (language switch, filter)
+  const open = new Set([...document.querySelectorAll("#tests details[open]")].map(d => d.dataset.id));
+  const list = tests.filter(t => filter === "all" || kind(t) === filter);
+  document.getElementById("testCount").textContent = tests.length;
+  document.getElementById("tests").innerHTML = list.map(t => {
+    const shown = new Set();
+    const steps = (t.steps || []).map(s => {
+      const e = s.healId ? byId[s.healId] : null;
+      let panel = "";
+      if (e && !shown.has(e.id)) { shown.add(e.id); panel = renderHeal(e); }
+      const cls = s.status === "HEALED" ? "healed" : s.status === "FAILED" ? "failed" : "";
+      const stat = e && e.status === "SUGGESTED" ? `<span class="pill llm">&#128161; ${L("stepSuggested")}</span>` :
+                   s.status === "HEALED" ? `<span class="pill warn">&#9888; ${L("stepHealed")}</span>` :
+                   s.status === "FAILED" ? `<span class="pill fail">&#10006; ${L("stepFailed")}</span>` : `<span class="pill pass">&#10004;</span>`;
+      return `<div class="step ${cls}"><div class="n">${s.index}</div><div class="t">+${dur(s.atMs)}</div>
+          <div class="act">${esc(L("action." + s.action))}</div>
+          <div class="el"><b>${esc(s.element)}</b> <span class="d">${esc(s.detail)}</span></div><div>${stat}</div></div>${panel}
+          ${s.error && !e ? `<div class="error">${esc(s.error)}</div>` : ""}`;
+    }).join("");
+    const failedHeals = t.events.filter(e => e.status === "FAILED" && !(t.steps || []).some(s => s.healId === e.id)).map(renderHeal).join("");
+    return `<details class="card test" data-kind="${kind(t)}" data-id="t${esc(t.id)}">
+      <summary>${statusPill(t)}<div class="tname"><span class="cls">${esc(t.className || "")} ›</span> ${esc(t.method || t.id)}</div>
+        <span class="tmeta hide-sm">${L("stepsHeals", (t.steps || []).length, t.healed.length)}</span>
+        <span class="tmeta">${dur(t.durationMs || 0)} · ${costPill(t.cost)}</span><span class="chev">&#9656;</span></summary>
+      <div class="tbody">${t.error ? `<div class="error">${esc(t.error)}</div>` : ""}<div class="steps">${steps || `<div class="empty">${L("noSteps")}</div>`}</div>${failedHeals}</div>
+    </details>`;
+  }).join("") || `<div class="card empty">${L("noTests")}</div>`;
+  document.querySelectorAll("#tests details").forEach(d => { if (open.has(d.dataset.id) || allOpen) d.open = true; });
+}
+
+function renderFilters() {
+  const counts = { all: tests.length, warn: tests.filter(t => kind(t) === "warn").length,
+                   fail: tests.filter(t => kind(t) === "fail").length, pass: tests.filter(t => kind(t) === "pass").length };
+  document.getElementById("filters").innerHTML = ["all", "warn", "fail", "pass"].map(k =>
+    `<button class="chip ${k === filter ? "active" : ""}" data-f="${k}">${L("filter." + k)} (${counts[k]})</button>`).join("");
+}
+
+function renderAll() {
+  renderStatic(); renderMeta(); renderKpis(); renderReview(); renderFilters(); renderTests();
+}
+
+let allOpen = false;
+document.getElementById("filters").addEventListener("click", ev => {
+  const b = ev.target.closest(".chip"); if (!b) return;
+  filter = b.dataset.f; renderFilters(); renderTests();
+});
+document.getElementById("toggleAll").addEventListener("click", ev => {
+  allOpen = !allOpen;
+  document.querySelectorAll("details").forEach(d => d.open = allOpen);
+  ev.target.textContent = allOpen ? L("collapseAll") : L("expandAll");
+});
+window.addEventListener("beforeprint", () => { filter = "all"; renderFilters(); renderTests(); document.querySelectorAll("details").forEach(d => d.open = true); });
+
+const lb = document.getElementById("lightbox");
+document.addEventListener("click", ev => {
+  const s = ev.target.closest(".shot");
+  if (s && s.dataset.src) { lb.querySelector("img").src = s.dataset.src; lb.classList.add("open"); }
+  else if (ev.target.closest("#lightbox")) lb.classList.remove("open");
+});
+
+renderLanguageMenu();
+renderAll();   // sections and tests start collapsed; the reader opens what they need
+document.body.setAttribute("data-report-ready", "true");
+</script>
+</body>
+</html>
