@@ -296,7 +296,7 @@ const events = R.events || [];
 const byId = Object.fromEntries(events.map(e => [e.id, e]));
 const tests = (R.tests || []).map(t => {
   const ev = events.filter(e => e.test === t.id);
-  return { ...t, events: ev, healed: ev.filter(e => e.status === "HEALED"), cost: ev.reduce((a, e) => a + (e.llmCostUsd || 0), 0) };
+  return { ...t, events: ev, healed: ev.filter(e => e.status === "HEALED" && e.kind !== "intent"), cost: ev.reduce((a, e) => a + (e.llmCostUsd || 0), 0) };
 });
 const kind = t => t.status === "FAILED" ? "fail" : (t.healed.length ? "warn" : "pass");
 
@@ -381,14 +381,14 @@ function fixSnippet(e) {
 
 function renderReview() {
   const unique = new Map();
-  events.filter(e => e.status !== "FAILED").forEach(e => {
+  events.filter(e => e.status !== "FAILED" && e.kind !== "intent").forEach(e => {
     const id = (e.kind || "locator") + " " + e.key;
     const u = unique.get(id) || { first: null, tests: new Set(), cost: 0 };
     if (!u.first || (u.first.reused && !e.reused)) u.first = e;
     u.tests.add(e.test); u.cost += e.llmCostUsd || 0;
     unique.set(id, u);
   });
-  const failed = events.filter(e => e.status === "FAILED");
+  const failed = events.filter(e => e.status === "FAILED" && e.kind !== "intent");
   document.getElementById("reviewCount").textContent = unique.size + failed.length;
   if (!unique.size && !failed.length) {
     document.getElementById("review").innerHTML = `<div class="empty">&#127881; ${L("reviewEmpty")}</div>`;
@@ -497,6 +497,13 @@ function renderHeal(e) {
   const failed = e.status === "FAILED";
   const suggested = e.status === "SUGGESTED";
   const popup = e.kind === "popup";
+  if (e.kind === "intent") {
+    return `<details class="heal" data-id="h${e.id}" ${e.status === "FAILED" ? "open" : ""}>
+    <summary class="heal-head"><span class="title">${e.status === "FAILED" ? "&#10060; " + L("intentFailed", esc(e.key)) : "&#128270; " + L("intentFound", esc(e.key))}</span>${sourcePill(e)}
+      <span class="pill cost ${(e.llmCostUsd || 0) > 0 ? "paid" : ""}">${usd(e.llmCostUsd || 0)}</span></summary>
+    <div class="heal-body"><div class="mono sel-new" dir="ltr">${esc((e.originalSelector || "").replace(/^intent:/, ""))} &#8594; ${esc(e.healedSelector || "")}</div>
+      <div class="trace">${(e.trace || []).map(traceLine).join("")}</div>${e.status === "FAILED" ? `<div class="error">${esc(e.reasoning)}</div>` : ""}</div></details>`;
+  }
   const title = popup ? (failed ? "&#10060; " + L("popupFailed", esc(e.key)) : "&#129695; " + L("popupHealed", esc(e.key)))
               : failed ? "&#10060; " + L("healFailed", esc(e.key))
               : suggested ? "&#128161; " + L("healSuggested", esc(e.key))

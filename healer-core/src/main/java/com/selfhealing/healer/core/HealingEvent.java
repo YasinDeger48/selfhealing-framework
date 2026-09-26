@@ -23,7 +23,8 @@ public class HealingEvent {
     public int id;
     public String test;
     public String key;
-    /** null = a healed locator; "popup" = a layer covering the element was dismissed. */
+    /** null = a healed locator; "popup" = a layer covering the element was dismissed; "intent" = a plain-language
+     *  step was resolved to an element (not a problem: never a WARN). */
     public String kind;
     public Status status;
     public String originalSelector;
@@ -63,7 +64,17 @@ public class HealingEvent {
     public record Candidate(double score, String element, String selector) {
     }
 
+    /** Something a person should review: heals and closed popups, not plain-language steps. */
+    public boolean needsReview() {
+        return status == Status.HEALED && !"intent".equals(kind);
+    }
+
     public String summaryLine() {
+        if ("intent".equals(kind)) {
+            return status == Status.FAILED
+                    ? String.format("NOT FOUND %s: %s", key, reasoning)
+                    : String.format("FOUND %s: '%s' -> '%s' (%s, confidence %.2f)", key, originalSelector, healedSelector, source, confidence);
+        }
         if ("popup".equals(kind)) {
             return status == Status.FAILED
                     ? String.format("POPUP %s: '%s' could not be closed", key, originalElement)

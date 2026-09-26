@@ -50,6 +50,17 @@ public class ClaudeLocatorHealer implements LocatorHealer {
             confidence: 0.9+ strong, 0.7-0.9 likely, below 0.6 answer -1. reasoning: one short sentence naming what changed.
             """;
 
+    private static final String INTENT_PROMPT = """
+            A UI test step names an element in plain language instead of a selector. Pick the candidate it means.
+            Input JSON: "d" = the step's description (any language), "el" = page-object name (hints the purpose), \
+            "c" = numbered candidates on the page ("s" = local similarity 0-1, a hint only).
+            Element keys: tag, a = attributes, t = text, l = label, p = parent elements, xy = position.
+            Match purpose and control type: "button" means something clickable, "field" something to type into, \
+            translations and synonyms count. If several candidates fit equally (identical list buttons) or none \
+            clearly fits, answer -1: a wrong pick makes the test do something else, -1 only fails the step.
+            confidence: 0.9+ strong, 0.7-0.9 likely, below 0.6 answer -1. reasoning: one short sentence.
+            """;
+
     private static final JsonOutputFormat ANSWER_FORMAT = JsonOutputFormat.builder()
             .schema(JsonOutputFormat.Schema.builder()
                     .putAdditionalProperty("type", JsonValue.from("object"))
@@ -100,7 +111,7 @@ public class ClaudeLocatorHealer implements LocatorHealer {
         String prompt = buildPrompt(request, masking);
         logPrompt(request.key(), prompt);
 
-        Attempt first = ask(model, prompt, request);
+        Attempt first = ask(SYSTEM_PROMPT, model, prompt, request.key(), request.candidates());
         // A clear "-1" usually means the element is really gone; escalating it doubles the cost of every real bug.
         boolean noMatch = first.suggestion().isEmpty() && first.usage(model) != null;
         if (first.acceptable(minConfidence) || escalateTo.isBlank() || escalateTo.equals(model)
@@ -108,12 +119,33 @@ public class ClaudeLocatorHealer implements LocatorHealer {
             return new Answer(first.suggestion(), first.usage(model), masking.counts());
         }
         System.out.println("[healer] " + com.selfhealing.healer.core.Messages.get("trace.llmEscalate", model, escalateTo));
-        Attempt second = ask(escalateTo, prompt, request);
+        Attempt second = ask(SYSTEM_PROMPT, escalateTo, prompt, request.key(), request.candidates());
         HealingSuggestion.LlmUsage total = new HealingSuggestion.LlmUsage(model + " -> " + escalateTo,
                 first.inputTokens + second.inputTokens, first.outputTokens + second.outputTokens, first.cost + second.cost);
         Optional<HealingSuggestion> chosen = second.suggestion().map(s -> new HealingSuggestion(s.selector(), s.source(),
                 s.confidence(), s.reasoning(), s.element(), s.changes(), total));
         return new Answer(chosen, total, masking.counts());
+    }
+
+    /** A plain-language step: the cheap model only (no escalation), candidates as for healing. */
+    @Override
+    public Answer findByIntent(IntentRequest request) {
+        if (request.candidates().isEmpty()) return Answer.none();
+        PrivacyFilter.Session masking = privacy.session();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("d", masking.mask(request.description()));
+        payload.put("el", request.key());
+        payload.put("c", candidates(request.candidates(), masking));
+        String prompt;
+        try {
+            prompt = Json.MAPPER.writer().without(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT)
+                    .writeValueAsString(payload);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+        logPrompt(request.key(), prompt);
+        Attempt a = ask(INTENT_PROMPT, model, prompt, request.key(), request.candidates());
+        return new Answer(a.suggestion(), a.usage(model), masking.counts());
     }
 
     /** With healer.llm.logPrompts=true every request body is saved, so reviewers can see exactly what left the machine. */
@@ -138,10 +170,10 @@ public class ClaudeLocatorHealer implements LocatorHealer {
         }
     }
 
-    private Attempt ask(String askModel, String prompt, Request request) {
+    private Attempt ask(String system, String askModel, String prompt, String key, List<HeuristicMatcher.Scored> candidates) {
         Attempt none = new Attempt(Optional.empty(), 0, 0, 0);
         if (calls.incrementAndGet() > maxCalls) {
-            System.out.println("[healer] Claude call budget reached (healer.llm.maxCallsPerRun=" + maxCalls + "), skipping " + request.key());
+            System.out.println("[healer] Claude call budget reached (healer.llm.maxCallsPerRun=" + maxCalls + "), skipping " + key);
             return none;
         }
 
@@ -149,7 +181,7 @@ public class ClaudeLocatorHealer implements LocatorHealer {
                 .model(askModel)
                 .maxTokens(4000L)
                 .systemOfTextBlockParams(List.of(TextBlockParam.builder()
-                        .text(SYSTEM_PROMPT + "\nWrite the reasoning in " + language + ".")
+                        .text(system + "\nWrite the reasoning in " + language + ".")
                         .cacheControl(CacheControlEphemeral.builder().build())
                         .build()))
                 .outputConfig(outputConfig(askModel))
@@ -160,7 +192,7 @@ public class ClaudeLocatorHealer implements LocatorHealer {
         try {
             response = client.messages().create(params);
         } catch (AnthropicException e) {
-            System.out.println("[healer] Claude call failed for " + request.key() + " (" + askModel + "): " + e.getMessage());
+            System.out.println("[healer] Claude call failed for " + key + " (" + askModel + "): " + e.getMessage());
             return none;
         }
 
@@ -171,7 +203,7 @@ public class ClaudeLocatorHealer implements LocatorHealer {
 
         Optional<StopReason> stop = response.stopReason();
         if (stop.isPresent() && !StopReason.END_TURN.equals(stop.get())) {
-            System.out.println("[healer] Claude stopped with " + stop.get() + " for " + request.key());
+            System.out.println("[healer] Claude stopped with " + stop.get() + " for " + key);
             return new Attempt(Optional.empty(), in, out, cost);
         }
 
@@ -180,7 +212,7 @@ public class ClaudeLocatorHealer implements LocatorHealer {
                 .map(t -> t.text())
                 .findFirst().orElse("");
         HealingSuggestion.LlmUsage usage = new HealingSuggestion.LlmUsage(askModel, in, out, cost);
-        return new Attempt(parse(text, request.candidates(), usage), in, out, cost);
+        return new Attempt(parse(text, candidates, usage), in, out, cost);
     }
 
     /** Haiku 4.5 does not accept the effort parameter; every other current model does. */
@@ -212,22 +244,26 @@ public class ClaudeLocatorHealer implements LocatorHealer {
         payload.put("el", request.key());
         payload.put("sel", masking.mask(request.originalSelector()));
         payload.put("fp", request.fingerprint() == null ? null : compact(request.fingerprint().getElement(), masking));
-        List<Map<String, Object>> list = new ArrayList<>();
-        for (int i = 0; i < request.candidates().size(); i++) {
-            HeuristicMatcher.Scored s = request.candidates().get(i);
-            Map<String, Object> c = new LinkedHashMap<>();
-            c.put("i", i);
-            c.put("s", Math.round(s.score() * 100) / 100.0);
-            c.putAll(compact(s.candidate(), masking));
-            list.add(c);
-        }
-        payload.put("c", list);
+        payload.put("c", candidates(request.candidates(), masking));
         try {
             return Json.MAPPER.writer().without(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT)
                     .writeValueAsString(payload);
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    private static List<Map<String, Object>> candidates(List<HeuristicMatcher.Scored> scored, PrivacyFilter.Session masking) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (int i = 0; i < scored.size(); i++) {
+            HeuristicMatcher.Scored s = scored.get(i);
+            Map<String, Object> c = new LinkedHashMap<>();
+            c.put("i", i);
+            c.put("s", Math.round(s.score() * 100) / 100.0);
+            c.putAll(compact(s.candidate(), masking));
+            list.add(c);
+        }
+        return list;
     }
 
     private static Map<String, Object> compact(ElementSnapshot e, PrivacyFilter.Session masking) {

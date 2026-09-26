@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.io.TempDir;
 import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
@@ -49,7 +50,8 @@ class SelfHealingDriverIntegrationTest {
     }
 
     @BeforeEach
-    void open(TestInfo info) {
+    void open(TestInfo info, @TempDir java.nio.file.Path store) {
+        System.setProperty("healer.storeDir", store.toString());   // every test starts without fingerprints or cache
         SelfHealingDriver.resetForTests();
         test = "SeleniumIT." + info.getTestMethod().orElseThrow().getName();
         HealingRecorder.startTest(test);
@@ -115,6 +117,19 @@ class SelfHealingDriverIntegrationTest {
         setContent(String.format(form, "e5f6a7b8"));
         healer.element("Checkout.pay", By.id("pay-a1b2c3d4")).click();
         assertEquals("[data-testid^=\"pay-button-\"]", lastEvent("Checkout.pay").healedSelector);
+    }
+
+    @Test
+    void plainLanguageStepsFindTheirElements() throws IOException {
+        setContent("<form onsubmit='return false'><label for='mail'>Email</label><input id='mail' type='email'>"
+                + "<button type='button' onclick=\"this.textContent='Sent'\">Send message</button></form>");
+
+        healer.find("Contact.email", "the email field").fill("jane@example.com");
+        healer.find("Contact.send", "Send message button").click();
+
+        assertEquals("jane@example.com", driver.findElement(By.id("mail")).getDomProperty("value"));
+        assertEquals("Sent", driver.findElement(By.tagName("button")).getText());
+        assertEquals("intent", lastEvent("Contact.send").kind);
     }
 
     @Test

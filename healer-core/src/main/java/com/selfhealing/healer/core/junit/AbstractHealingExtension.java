@@ -48,7 +48,7 @@ public abstract class AbstractHealingExtension implements BeforeEachCallback, Af
         String test = testId(context);
         try {
             List<HealingEvent> healed = HealingRecorder.eventsFor(test).stream()
-                    .filter(e -> e.status == HealingEvent.Status.HEALED)
+                    .filter(HealingEvent::needsReview)
                     .toList();
             if (healed.isEmpty()) return;
             double cost = healed.stream().mapToDouble(e -> e.llmCostUsd).sum();

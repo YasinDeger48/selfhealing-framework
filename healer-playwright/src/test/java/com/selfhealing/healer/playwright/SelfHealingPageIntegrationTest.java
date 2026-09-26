@@ -6,12 +6,14 @@ import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import com.selfhealing.healer.core.HealingEvent;
 import com.selfhealing.healer.core.HealingRecorder;
+import com.selfhealing.healer.core.HealingSuggestion;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -44,8 +46,9 @@ class SelfHealingPageIntegrationTest {
     }
 
     @BeforeEach
-    void open(TestInfo info) {
+    void open(TestInfo info, @TempDir java.nio.file.Path store) {
         System.clearProperty("healer.mode");
+        System.setProperty("healer.storeDir", store.toString());   // every test starts without fingerprints or cache
         SelfHealingPage.resetForTests();
         test = "IT." + info.getTestMethod().orElseThrow().getName();
         HealingRecorder.startTest(test);
@@ -162,6 +165,35 @@ class SelfHealingPageIntegrationTest {
 
         assertEquals("Saved", page.locator("#save").textContent());
         assertEquals(0, popups());
+    }
+
+    @Test
+    void plainLanguageStepsFindTheirElements() {
+        page.setContent("<form onsubmit='return false'><label for='mail'>Email</label><input id='mail' type='email'>"
+                + "<label><input type='checkbox' id='terms'> I accept the terms</label>"
+                + "<button type='button' onclick=\"document.getElementById('out').textContent='Sent'\">Send message</button>"
+                + "<a href='#help'>Help</a></form><p id='out'></p>");
+
+        healer.find("Contact.email", "the email field").fill("jane@example.com");
+        healer.find("Contact.terms", "accept the terms checkbox").check();
+        healer.find("Contact.send", "Send message button").click();
+
+        assertEquals("jane@example.com", page.locator("#mail").inputValue());
+        assertTrue(page.locator("#terms").isChecked());
+        assertEquals("Sent", page.locator("#out").textContent());
+        HealingEvent e = lastEvent("Contact.send");
+        assertEquals("intent", e.kind);
+        assertEquals(HealingSuggestion.Source.HEURISTIC, e.source, "found locally, no LLM");
+
+        // the same step again: the saved selector is used, no new resolution
+        healer.find("Contact.send", "Send message button").click();
+        assertEquals(1, HealingRecorder.eventsFor(test).stream().filter(x -> x.key.equals("Contact.send")).count());
+    }
+
+    @Test
+    void ambiguousPlainLanguageStepFailsInsteadOfGuessing() {
+        page.setContent("<ul><li>Mug <button>Add</button></li><li>Cup <button>Add</button></li></ul>");
+        assertThrows(HealingFailedException.class, () -> healer.find("Shop.add", "the Add button").click());
     }
 
     @Test

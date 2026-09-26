@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -217,6 +218,80 @@ public class HealingEngine {
         learned.setOrigin("learned");
         fingerprints.put(key, learned);
         listener.fingerprintLearned(key);
+    }
+
+    /** Prefix of the "selector" under which a plain-language step is cached: intent:the Sign in button. */
+    public static final String INTENT = "intent:";
+    private static final double INTENT_MIN_SCORE = 0.75;
+    private static final double INTENT_MIN_MARGIN = 0.15;
+
+    /**
+     * Finds the element a plain-language step describes. Order: the selector found by an earlier run (free) - the
+     * element's recorded fingerprint if that selector broke (regular healing) - local matching of the description
+     * (free) - the LLM. The result is cached and the element's fingerprint recorded, so later runs cost nothing.
+     * Like healing, it never guesses: look-alikes the description cannot tell apart mean "not found".
+     */
+    public Result resolveIntent(String key, String description, PageAdapter page, HealingListener listener) {
+        String selectorKey = INTENT + description;
+        Optional<CachedHeal> cached = cachedHeal(key, selectorKey);
+        if (cached.isPresent() && page.count(cached.get().healedSelector) == 1) {
+            listener.cacheHit(key, cached.get());
+            CachedHeal c = cached.get();
+            return new Result(new HealingSuggestion(c.healedSelector, HealingSuggestion.Source.CACHE, c.confidence,
+                    "Found before (" + c.source + ")", page.snapshot(c.healedSelector), Map.of()), null, List.of());
+        }
+        if (fingerprints.get(key).isPresent()) {
+            Result healed = runPipeline(key, selectorKey, page, listener);
+            if (healed.healed()) return healed;
+        }
+
+        List<ElementSnapshot> candidates = page.collectCandidates();
+        List<HeuristicMatcher.Scored> ranked = IntentMatcher.rank(description, candidates).stream()
+                .map(m -> new HeuristicMatcher.Scored(m.element(), m.score(), Map.of())).toList();
+        double best = ranked.isEmpty() ? 0 : ranked.get(0).score();
+        double margin = best - (ranked.size() > 1 ? ranked.get(1).score() : 0);
+        boolean accepted = best >= INTENT_MIN_SCORE && margin >= INTENT_MIN_MARGIN;
+        listener.heuristicRanked(key, ranked, INTENT_MIN_SCORE, INTENT_MIN_MARGIN, accepted);
+        if (accepted) {
+            ElementSnapshot el = ranked.get(0).candidate();
+            int matches = page.count(el.getSelector());
+            listener.validated(key, el.getSelector(), matches);
+            if (matches == 1) {
+                return foundByIntent(key, selectorKey, page, new HealingSuggestion(el.getSelector(), HealingSuggestion.Source.HEURISTIC,
+                        best, String.format(Locale.ROOT, "Description match %.2f (margin %.2f)", best, margin), el, Map.of()), ranked);
+            }
+        }
+
+        HealingSuggestion.LlmUsage usage = null;
+        if (config.llmEnabled() && llm != LocatorHealer.NONE && !ranked.isEmpty()) {
+            List<HeuristicMatcher.Scored> top = ranked.subList(0, Math.min(config.llmCandidates(), ranked.size()));
+            listener.llmRequested(key, config.llmModel(), top.size());
+            long t0 = System.currentTimeMillis();
+            LocatorHealer.Answer answer = llm.findByIntent(new LocatorHealer.IntentRequest(key, description, top, page.url()));
+            usage = answer.usage();
+            listener.llmAnswered(key, answer, System.currentTimeMillis() - t0);
+            Optional<HealingSuggestion> s = answer.suggestion();
+            if (s.isPresent() && s.get().confidence() >= config.minConfidence()) {
+                int matches = page.count(s.get().selector());
+                listener.validated(key, s.get().selector(), matches);
+                if (matches == 1) {
+                    ElementSnapshot el = page.snapshot(s.get().selector());
+                    return foundByIntent(key, selectorKey, page, new HealingSuggestion(s.get().selector(), HealingSuggestion.Source.LLM,
+                            s.get().confidence(), s.get().reasoning(), el, Map.of(), s.get().usage()), ranked);
+                }
+            }
+        }
+        String reason = ranked.isEmpty() ? "no candidate elements on the page"
+                : String.format(Locale.ROOT, "best match %s scored %.2f (min %.2f), margin %.2f (min %.2f)%s",
+                        ranked.get(0).candidate().describe(), best, INTENT_MIN_SCORE, margin, INTENT_MIN_MARGIN,
+                        config.llmEnabled() ? "; LLM found no clear match" : "; LLM disabled");
+        return new Result(null, "no element clearly matches \"" + description + "\": " + reason, ranked, usage);
+    }
+
+    private Result foundByIntent(String key, String selectorKey, PageAdapter page, HealingSuggestion s,
+                                 List<HeuristicMatcher.Scored> ranked) {
+        if (s.element() != null) fingerprints.put(key, new Fingerprint(key, selectorKey, page.url(), s.element()));
+        return new Result(cacheAndReturn(key, selectorKey, s), null, ranked);
     }
 
     private HealingSuggestion cacheAndReturn(String key, String originalSelector, HealingSuggestion s) {

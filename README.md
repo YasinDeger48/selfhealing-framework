@@ -101,6 +101,19 @@ class LoginTest {
 fire the input event React, Vue and Angular listen to (plain `WebElement.clear()` does not). Code fixes rewrite
 `By.id("x")` / `@FindBy(id = "x")` to `By.cssSelector("...")` / `@FindBy(css = "...")`.
 
+**Plain-language steps (no selector).** Name an element the way a person would, in any language:
+
+```java
+healer.find("Contact.email", "the email field").fill("jane@example.com");     // Playwright
+healer.find("Contact.send", "mesajı gönder butonu").click();                  // Selenium: same method
+```
+
+The description is matched locally first (visible text, label, aria-label, placeholder; "button", "field",
+"checkbox" ... must fit the element's type) - free. If that is not clear, Claude picks the element (about $0.002).
+The selector and fingerprint are saved, so later runs cost nothing and a changed element is healed like any other.
+Look-alikes the description cannot tell apart (three identical "Add" buttons) fail the step instead of guessing.
+Resolved steps are shown in the report as information, never as a WARN.
+
 **4. Run the suite once against a working build** — this records the fingerprints (`.healer/`).
 From then on, broken locators are healed. Commit `.healer/` to share the baseline with your team.
 

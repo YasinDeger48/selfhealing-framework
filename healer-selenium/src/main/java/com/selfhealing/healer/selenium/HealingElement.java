@@ -89,7 +89,10 @@ public class HealingElement {
                 .reduce((a, b) -> b)
                 .ifPresent(e -> {
                     step.healId = e.id;
-                    step.status = e.status == HealingEvent.Status.HEALED ? "HEALED" : "FAILED";
+                    // a plain-language step that was found is a normal step, not a heal
+                    if (!("intent".equals(e.kind) && e.status == HealingEvent.Status.HEALED)) {
+                        step.status = e.status == HealingEvent.Status.HEALED ? "HEALED" : "FAILED";
+                    }
                 });
     }
 

@@ -99,6 +99,15 @@ public class SelfHealingDriver {
         return new HealingElement(this, key, by);
     }
 
+    /**
+     * A plain-language step instead of a locator: {@code healer.find("Login.submit", "the Sign in button").click()}.
+     * Matched locally (free) or by Claude; the selector and fingerprint are saved for later runs. Look-alikes the
+     * description cannot tell apart fail the step instead of guessing.
+     */
+    public HealingElement find(String key, String description) {
+        return element(key, new IntentBy(description));
+    }
+
     /** Navigates and records it as a test step. */
     public void navigate(String url) {
         HealingRecorder.Step step = HealingRecorder.step(Messages.get("step.page"), "navigate", url);
@@ -116,6 +125,7 @@ public class SelfHealingDriver {
     WebElement resolve(String key, By by) {
         HealingEngine eng = engine();
         HealerConfig config = eng.config();
+        if (by instanceof IntentBy intent) return resolveIntent(key, intent, eng, config);
         if (config.mode() == HealerConfig.Mode.OFF) return driver.findElement(by);
         SeleniumSelectors.Parsed parsed = SeleniumSelectors.parse(by);
         String selector = parsed.selector();
@@ -179,6 +189,49 @@ public class SelfHealingDriver {
         }
         RUN_HEALS.put(key, event);
         return driver.findElement(SeleniumSelectors.toBy(result.suggestion().selector()));
+    }
+
+    /** Resolves a plain-language step; reported as an info step, never as a WARN. */
+    private WebElement resolveIntent(String key, IntentBy intent, HealingEngine eng, HealerConfig config) {
+        String selectorKey = HealingEngine.INTENT + intent.description;
+        Duration implicit = driver.manage().timeouts().getImplicitWaitTimeout();
+        driver.manage().timeouts().implicitlyWait(Duration.ZERO);
+        try {
+            var known = eng.cachedHeal(key, selectorKey);
+            if (known.isPresent()) {
+                long end = System.currentTimeMillis() + config.probeTimeoutMs();
+                while (true) {
+                    List<WebElement> found = findQuietly(SeleniumSelectors.toBy(known.get().healedSelector));
+                    if (found.size() == 1) return found.get(0);
+                    if (System.currentTimeMillis() >= end) break;
+                    sleep(100);
+                }
+            }
+            HealingTrace trace = new HealingTrace(verbose ? HealingTrace.console() : null).forIntent();
+            trace.title(key);
+            trace.note("info", "trace.intent.start", intent.description);
+            long started = System.currentTimeMillis();
+            HealingEngine.Result result = eng.resolveIntent(key, intent.description, adapter, trace);
+            HealingEvent event = toEvent(key, selectorKey, null, intent, result, eng);
+            event.kind = "intent";
+            event.healDurationMs = System.currentTimeMillis() - started;
+            if (result.healed()) {
+                trace.note("ok", "trace.intent.found", Messages.get("source." + result.suggestion().source()),
+                        result.suggestion().confidence(), result.suggestion().selector(),
+                        com.selfhealing.healer.core.LlmPricing.format(event.llmCostUsd));
+            } else {
+                trace.note("error", "trace.intent.notFound", result.failureReason());
+            }
+            event.trace = trace.lines();
+            if (!result.healed()) {
+                HealingRecorder.record(event);
+                throw new HealingFailedException("Step \"" + intent.description + "\" (" + key + "): " + result.failureReason());
+            }
+            if (result.suggestion().source() != HealingSuggestion.Source.CACHE) HealingRecorder.record(event);
+            return driver.findElement(SeleniumSelectors.toBy(result.suggestion().selector()));
+        } finally {
+            driver.manage().timeouts().implicitlyWait(implicit);
+        }
     }
 
     /** Before an interaction: closes a layer (cookie banner, modal) that covers the element - see {@link SeleniumPopups}. */

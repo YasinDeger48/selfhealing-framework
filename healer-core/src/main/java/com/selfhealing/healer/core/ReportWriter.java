@@ -39,9 +39,10 @@ public final class ReportWriter {
         summary.put("tests", tests.size());
         summary.put("passed", tests.stream().filter(t -> "PASSED".equals(t.status)).count());
         summary.put("failed", tests.stream().filter(t -> "FAILED".equals(t.status)).count());
-        summary.put("testsWithWarn", events.stream().filter(e -> e.status == HealingEvent.Status.HEALED)
+        summary.put("testsWithWarn", events.stream().filter(HealingEvent::needsReview)
                 .map(e -> e.test).distinct().count());
-        summary.put("healed", count(events, HealingEvent.Status.HEALED));
+        summary.put("healed", events.stream().filter(HealingEvent::needsReview).count());
+        summary.put("intents", events.stream().filter(e -> "intent".equals(e.kind) && e.status == HealingEvent.Status.HEALED).count());
         summary.put("suggested", count(events, HealingEvent.Status.SUGGESTED));
         summary.put("healFailed", count(events, HealingEvent.Status.FAILED));
         summary.put("uniqueElements", events.stream().map(e -> e.key).distinct().count());
@@ -128,7 +129,8 @@ public final class ReportWriter {
         }
     }
 
-    public static String consoleSummary(List<HealingEvent> events, Path reportFile) {
+    public static String consoleSummary(List<HealingEvent> all, Path reportFile) {
+        List<HealingEvent> events = all.stream().filter(e -> !"intent".equals(e.kind) || e.status == HealingEvent.Status.FAILED).toList();
         if (events.isEmpty()) return "[healer] No locators needed healing. Report: " + reportFile.toAbsolutePath();
         StringBuilder sb = new StringBuilder("\n")
                 .append("================ SELF-HEALING SUMMARY ================\n")

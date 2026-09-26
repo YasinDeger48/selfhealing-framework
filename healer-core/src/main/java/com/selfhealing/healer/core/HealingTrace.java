@@ -51,6 +51,14 @@ public class HealingTrace implements HealingListener {
         return ranked.stream().limit(SHOWN_CANDIDATES).toList();
     }
 
+    private boolean intent;
+
+    /** This trace follows a plain-language step (matching a description, not a fingerprint). */
+    public HealingTrace forIntent() {
+        this.intent = true;
+        return this;
+    }
+
     /** A line from outside the healing pipeline (e.g. popup handling); {@code key} is a message key. */
     public void note(String kind, String key, Object... args) {
         msg(kind, key, args);
@@ -104,8 +112,12 @@ public class HealingTrace implements HealingListener {
     public void heuristicRanked(String key, List<HeuristicMatcher.Scored> ranked, double minConfidence,
                                 double minMargin, boolean accepted) {
         this.ranked = ranked;
-        msg("info", "trace.cacheMiss");
-        msg("info", "trace.heuristic", ranked.size(), minConfidence, minMargin);
+        if (intent) {
+            msg("info", "trace.intent.local", ranked.size(), minConfidence, minMargin);
+        } else {
+            msg("info", "trace.cacheMiss");
+            msg("info", "trace.heuristic", ranked.size(), minConfidence, minMargin);
+        }
         for (int i = 0; i < Math.min(SHOWN_CANDIDATES, ranked.size()); i++) {
             HeuristicMatcher.Scored s = ranked.get(i);
             add("candidate", String.format(Locale.ROOT, "   #%d  %.2f  %s", i + 1, s.score(), s.candidate().describe()));

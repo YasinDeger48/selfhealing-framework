@@ -32,7 +32,21 @@ public interface LocatorHealer {
         }
     }
 
+    /**
+     * A plain-language step: find the element the description names (no selector, no fingerprint yet).
+     *
+     * @param description e.g. "the Sign in button", in any language
+     * @param candidates  page elements, best local matches first
+     */
+    record IntentRequest(String key, String description, List<HeuristicMatcher.Scored> candidates, String pageUrl) {
+    }
+
     Answer suggest(Request request);
+
+    /** Optional: finds the element for a description. Healers without this ability find nothing. */
+    default Answer findByIntent(IntentRequest request) {
+        return Answer.none();
+    }
 
     LocatorHealer NONE = request -> Answer.none();
 }
