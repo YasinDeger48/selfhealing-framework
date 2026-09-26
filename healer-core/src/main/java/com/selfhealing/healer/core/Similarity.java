@@ -67,7 +67,23 @@ public final class Similarity {
     public static double identifier(String a, String b) {
         if (a == null || b == null) return 0;
         if (a.equals(b)) return 1;
-        return Math.max(jaccard(tokens(a), tokens(b)), 0.9 * levenshteinRatio(a, b));
+        double sim = Math.max(jaccard(tokens(a), tokens(b)), 0.9 * levenshteinRatio(a, b));
+        // booking-reference-fe465c1e vs booking-reference-3fc4aa85: the same id with a generated part.
+        String sa = withoutGenerated(a);
+        String sb = withoutGenerated(b);
+        if (!sa.isEmpty() && sa.equals(sb) && !sa.equals(normalize(a))) sim = Math.max(sim, GENERATED_MATCH);
+        return sim;
+    }
+
+    private static final double GENERATED_MATCH = 0.95;
+    // A generated token: 6+ letters/digits with at least one digit (fe465c1e, 45901727, a1b2c3).
+    private static final java.util.regex.Pattern GENERATED = java.util.regex.Pattern.compile("(?=[a-z]*\\d)[a-z0-9]{6,}");
+
+    /** The identifier with random-looking tokens removed, e.g. "booking-reference-fe465c1e" -> "booking reference". */
+    static String withoutGenerated(String s) {
+        return Arrays.stream(normalize(s).split("[^a-z0-9]+"))
+                .filter(t -> !t.isEmpty() && !GENERATED.matcher(t).matches())
+                .collect(Collectors.joining(" "));
     }
 
     /** For human text (labels, button text, placeholders). */

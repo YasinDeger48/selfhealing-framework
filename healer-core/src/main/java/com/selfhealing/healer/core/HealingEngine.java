@@ -96,6 +96,16 @@ public class HealingEngine {
                     reasoning, element, diff(fp, element)), null, List.of());
         }
 
+        // Cold start: never seen working -> derive a fingerprint from the selector itself.
+        boolean coldStart = fp == null || !"recorded".equals(fp.getOrigin());
+        if (fp == null) {
+            ElementSnapshot derived = SelectorFingerprint.derive(originalSelector);
+            if (derived != null) {
+                fp = new Fingerprint(key, originalSelector, page.url(), derived);
+                fp.setOrigin("derived");
+                listener.fingerprintDerived(key, derived);
+            }
+        }
         List<ElementSnapshot> candidates = page.collectCandidates();
         List<HeuristicMatcher.Scored> ranked = fp == null ? List.of() : matcher.rank(fp.getElement(), candidates);
 
@@ -113,6 +123,7 @@ public class HealingEngine {
                 if (matches == 1) {
                     HealingSuggestion s = new HealingSuggestion(best.candidate().getSelector(), HealingSuggestion.Source.HEURISTIC,
                             best.score(), explain(best, margin), best.candidate(), diff(fp, best.candidate()));
+                    if (coldStart) learn(key, originalSelector, page.url(), best.candidate(), listener);
                     return new Result(cacheAndReturn(key, originalSelector, s), null, ranked);
                 }
             }
@@ -137,6 +148,7 @@ public class HealingEngine {
                     ElementSnapshot element = page.snapshot(s.get().selector());
                     HealingSuggestion validated = new HealingSuggestion(s.get().selector(), HealingSuggestion.Source.LLM,
                             s.get().confidence(), s.get().reasoning(), element, diff(fp, element), s.get().usage());
+                    if (coldStart && element != null) learn(key, originalSelector, page.url(), element, listener);
                     return new Result(cacheAndReturn(key, originalSelector, validated), null, ranked);
                 }
             }
@@ -144,7 +156,7 @@ public class HealingEngine {
 
         String reason;
         if (fp == null) {
-            reason = "no fingerprint recorded for '" + key + "' - run the test once against a working build";
+            reason = "no fingerprint recorded for '" + key + "' and nothing usable in the selector - run the test once against a working build";
         } else if (ranked.isEmpty()) {
             reason = "no candidate elements on the page";
         } else {
@@ -155,6 +167,14 @@ public class HealingEngine {
                     config.llmEnabled() ? "; LLM healer did not return a valid match" : "; LLM healer disabled");
         }
         return new Result(null, reason, ranked, llmUsage);
+    }
+
+    /** Stores the healed element as the fingerprint of an element that never had a recorded one. */
+    private void learn(String key, String selector, String url, ElementSnapshot element, HealingListener listener) {
+        Fingerprint learned = new Fingerprint(key, selector, url, element);
+        learned.setOrigin("learned");
+        fingerprints.put(key, learned);
+        listener.fingerprintLearned(key);
     }
 
     private HealingSuggestion cacheAndReturn(String key, String originalSelector, HealingSuggestion s) {

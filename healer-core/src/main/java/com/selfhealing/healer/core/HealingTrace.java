@@ -76,6 +76,16 @@ public class HealingTrace implements HealingListener {
     }
 
     @Override
+    public void fingerprintDerived(String key, ElementSnapshot derived) {
+        msg("warn", "trace.derived", derived.describe());
+    }
+
+    @Override
+    public void fingerprintLearned(String key) {
+        msg("ok", "trace.learned");
+    }
+
+    @Override
     public void cacheHit(String key, HealingEngine.CachedHeal heal) {
         msg("ok", "trace.cacheHit", heal.source.name(), heal.healedSelector);
     }

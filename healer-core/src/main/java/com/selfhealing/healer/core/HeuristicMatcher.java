@@ -51,7 +51,7 @@ public class HeuristicMatcher {
 
     public Scored score(ElementSnapshot fp, ElementSnapshot c) {
         Map<String, Double> signals = new LinkedHashMap<>();
-        signals.put("tag", tagSimilarity(fp, c));
+        if (fp.getTag() != null) signals.put("tag", tagSimilarity(fp, c)); // a selector-derived fingerprint may lack it
 
         for (String attr : ElementSnapshot.TRACKED_ATTRIBUTES) {
             String expected = fp.attr(attr);
@@ -95,8 +95,10 @@ public class HeuristicMatcher {
     }
 
     private static final double INDEX_MISMATCH_FACTOR = 0.5;
-    private static final Pattern TRAILING_NUMBER = Pattern.compile("(\\d+)$");
-    private static final Pattern EMBEDDED_NUMBER = Pattern.compile("[-_](\\d+)(?=$|[^\\w])");
+    // An item number is a short, all-digit token after - or _ (add-to-cart-8, row_12). Random ids such as
+    // "-fe465c10" or long generated numbers are not item numbers and must not trigger the penalty.
+    private static final Pattern TRAILING_NUMBER = Pattern.compile("[-_](\\d{1,4})$");
+    private static final Pattern EMBEDDED_NUMBER = Pattern.compile("[-_](\\d{1,4})(?=$|[^\\w])");
 
     /**
      * True when fingerprint and candidate carry different item numbers - in an identifier

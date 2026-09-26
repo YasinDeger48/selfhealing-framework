@@ -13,6 +13,8 @@ public class Fingerprint {
     private String pageUrl;
     private Instant capturedAt;
     private ElementSnapshot element;
+    /** "recorded" = seen while the selector worked; "learned" = taken from the first successful heal (cold start). */
+    private String origin = "recorded";
 
     public Fingerprint() {
     }
@@ -34,5 +36,7 @@ public class Fingerprint {
     public Instant getCapturedAt() { return capturedAt; }
     public void setCapturedAt(Instant capturedAt) { this.capturedAt = capturedAt; }
     public ElementSnapshot getElement() { return element; }
+    public String getOrigin() { return origin; }
+    public void setOrigin(String origin) { this.origin = origin; }
     public void setElement(ElementSnapshot element) { this.element = element; }
 }

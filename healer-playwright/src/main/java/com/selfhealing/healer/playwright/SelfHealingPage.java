@@ -122,25 +122,29 @@ public class SelfHealingPage {
         Locator original = adapter.locator(selector);
         if (config.mode() == HealerConfig.Mode.OFF) return original;
 
+        // Known replacements: a heal from earlier in this run, and one cached by an earlier run.
         HealingEvent previous = RUN_HEALS.get(key);
-        if (previous != null && selector.equals(previous.originalSelector)
-                && onlyHealedMatches(original, previous.healedSelector, config)) {
-            recordOnce(previous);
-            return adapter.locator(previous.healedSelector);
-        }
+        String runHeal = previous != null && selector.equals(previous.originalSelector) ? previous.healedSelector : null;
+        String cachedHeal = eng.cachedHeal(key, selector).map(c -> c.healedSelector).orElse(null);
 
-        // A heal from an earlier run is tried alongside the original so a broken selector does not
-        // cost a probe timeout; if the original matches again (site fixed), it wins and warnings stop.
-        boolean cachedFirst = eng.cachedHeal(key, selector)
-                .filter(c -> onlyHealedMatches(original, c.healedSelector, config))
-                .isPresent();
+        // One wait for whichever renders first - the original or a known replacement - so a broken selector
+        // costs a single probe timeout. If the original matches again (site fixed), it wins and warnings stop.
+        Locator any = original;
+        if (runHeal != null) any = any.or(adapter.locator(runHeal));
+        if (cachedHeal != null && !cachedHeal.equals(runHeal)) any = any.or(adapter.locator(cachedHeal));
+        boolean rendered = isAttached(any, config.probeTimeoutMs());
 
-        if (!cachedFirst && isAttached(original, config.probeTimeoutMs())) {
+        if (rendered && safeCount(original) > 0) {
             if (CAPTURED.add(key) && original.count() == 1) {
                 eng.remember(key, selector, adapter.url(), PlaywrightPageAdapter.snapshot(original));
             }
             return original;
         }
+        if (rendered && runHeal != null && safeCount(adapter.locator(runHeal)) > 0) {
+            recordOnce(previous);
+            return adapter.locator(runHeal);
+        }
+        // Otherwise heal: the engine uses the cached heal if it matches, else scans the page.
 
         long probeWait = System.currentTimeMillis() - started;
         HealingTrace trace = new HealingTrace(verbose ? HealingTrace.console() : null);
@@ -209,13 +213,6 @@ public class SelfHealingPage {
         } catch (com.microsoft.playwright.PlaywrightException e) {
             return false; // invalid selector syntax counts as broken
         }
-    }
-
-    /** Waits for either selector to render, then true when only the healed one matches. */
-    private boolean onlyHealedMatches(Locator original, String healedSelector, HealerConfig config) {
-        Locator healed = adapter.locator(healedSelector);
-        return isAttached(original.or(healed), config.probeTimeoutMs())
-                && safeCount(original) == 0 && safeCount(healed) > 0;
     }
 
     private static int safeCount(Locator locator) {
