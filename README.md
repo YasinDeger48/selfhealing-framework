@@ -30,14 +30,14 @@ mvn install
 <dependency>
   <groupId>com.selfhealing</groupId>
   <artifactId>healer-playwright</artifactId>
-  <version>0.1.0</version>
+  <version>2.0.0</version>
   <scope>test</scope>
 </dependency>
 <!-- optional: Claude stage -->
 <dependency>
   <groupId>com.selfhealing</groupId>
   <artifactId>healer-claude</artifactId>
-  <version>0.1.0</version>
+  <version>2.0.0</version>
   <scope>test</scope>
 </dependency>
 ```
