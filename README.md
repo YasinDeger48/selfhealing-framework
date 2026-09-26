@@ -1,8 +1,9 @@
 # Self-Healing Locator Framework
 
 [![CI](https://github.com/YasinDeger48/selfhealing-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/YasinDeger48/selfhealing-framework/actions/workflows/ci.yml)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.yasindeger48/healer-core?label=Maven%20Central)](https://central.sonatype.com/namespace/io.github.yasindeger48)
 
-A Java library for **Playwright + JUnit 5** test suites. When a locator stops matching because the
+A Java library for **Playwright or Selenium** test suites (JUnit 5, TestNG, Cucumber). When a locator stops matching because the
 application's markup changed, it finds the element again, keeps the test running and reports every
 repair as a **WARN** with the suggested page-object fix. Works with any web application and any test
 project — add it as a dependency, wrap your locators, done.
@@ -23,14 +24,7 @@ adapters: healing, popups, locator quality, failure analysis, reports and code f
 
 ## Getting started in your project
 
-**1. Build and install the framework** (not needed once it is on Maven Central - see [RELEASING.md](RELEASING.md)):
-
-```bash
-cd healing-framework
-mvn install
-```
-
-**2. Add the dependencies** to your test project:
+**1. Add the dependencies** to your test project - they are on Maven Central, nothing to build or install:
 
 ```xml
 <dependency>
@@ -48,7 +42,11 @@ mvn install
 </dependency>
 ```
 
-**3. Wrap your Playwright page and give each element a stable name:**
+Use `healer-selenium` instead of `healer-playwright` for Selenium, and add `healer-testng` or `healer-cucumber` if
+you do not use JUnit 5. Gradle: `testImplementation("io.github.yasindeger48:healer-playwright:2.0.0")`.
+Building from source instead: `mvn install` in this repository, then use the same coordinates.
+
+**2. Wrap your Playwright page and give each element a stable name:**
 
 ```java
 @ExtendWith(HealingExtension.class)
@@ -128,7 +126,7 @@ Resolved steps are shown in the report as information, never as a WARN.
   Each scenario is a test in the report and its Gherkin steps are report steps; a failing step is analysed before the
   `@After` hooks close the browser.
 
-**4. Run the suite once against a working build** — this records the fingerprints (`.healer/`).
+**3. Run the suite once against a working build** — this records the fingerprints (`.healer/`).
 From then on, broken locators are healed. Commit `.healer/` to share the baseline with your team.
 
 ## How healing works
@@ -364,6 +362,11 @@ site. They use this framework only through the Maven dependencies above — like
 
 `.mvn/maven.config` resolves dependencies from Maven Central directly (a corporate mirror configured in
 `~/.m2/settings.xml` may be reachable only on VPN). Delete it to use your global settings.
+
+## Releasing a new version
+
+See [RELEASING.md](RELEASING.md) - in short: `mvn versions:set -DnewVersion=2.0.1 -DgenerateBackupPoms=false`,
+commit, `git tag v2.0.1 && git push origin main v2.0.1`, then press **Publish** in the Central Portal.
 
 ## License
 
