@@ -1,7 +1,5 @@
 package com.selfhealing.healer.selenium;
 
-import com.selfhealing.healer.core.HealerConfig;
-import com.selfhealing.healer.core.HealingEngine;
 import com.selfhealing.healer.core.HealingRuntime;
 import com.selfhealing.healer.core.junit.AbstractHealingExtension;
 import org.openqa.selenium.PrintsPage;
@@ -27,14 +25,7 @@ import java.util.Optional;
  */
 public class SeleniumHealingExtension extends AbstractHealingExtension {
 
-    private static final HealingRuntime RUNTIME = new HealingRuntime() {
-        @Override public HealingEngine engine() { return SelfHealingDriver.engine(); }
-        @Override public String failureScreenshot(String testId) { return SelfHealingDriver.failureScreenshot(testId); }
-        @Override public String currentUrl() { return SelfHealingDriver.currentUrl(); }
-        @Override public Optional<Path> exportPdf(Path html, Path pdf, HealerConfig config) {
-            return printToPdf(html, pdf, config.get("healer.report.pdfBrowser", "msedge"));
-        }
-    };
+    private static final HealingRuntime RUNTIME = new SeleniumRuntime();
 
     @Override
     protected HealingRuntime runtime() {

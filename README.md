@@ -14,9 +14,11 @@ project — add it as a dependency, wrap your locators, done.
 | `io.github.yasindeger48:healer-core` | Driver-independent engine: element fingerprints, local matching, healing cache, events, reports |
 | `io.github.yasindeger48:healer-playwright` | Playwright adapter (`SelfHealingPage`, `HealingLocator`), JUnit 5 extension, HTML/PDF report |
 | `io.github.yasindeger48:healer-selenium` | Selenium WebDriver adapter (`SelfHealingDriver`, `HealingElement`), JUnit 5 extension, HTML/PDF report |
+| `io.github.yasindeger48:healer-testng` | TestNG listener (registers itself) - use with either adapter instead of the JUnit 5 extension |
+| `io.github.yasindeger48:healer-cucumber` | Cucumber plugin - scenarios become report tests, Gherkin steps become report steps |
 | `io.github.yasindeger48:healer-claude` | Optional last healing stage backed by the Claude API — enabled by adding it to the classpath |
 
-Requirements: Java 17+, Playwright for Java **or** Selenium 4, JUnit 5. Everything below works the same with both
+Requirements: Java 17+, Playwright for Java **or** Selenium 4, JUnit 5 **or** TestNG 7 **or** Cucumber 7. Everything below works the same with both
 adapters: healing, popups, locator quality, failure analysis, reports and code fixes.
 
 ## Getting started in your project
@@ -113,6 +115,18 @@ The description is matched locally first (visible text, label, aria-label, place
 The selector and fingerprint are saved, so later runs cost nothing and a changed element is healed like any other.
 Look-alikes the description cannot tell apart (three identical "Add" buttons) fail the step instead of guessing.
 Resolved steps are shown in the report as information, never as a WARN.
+
+**TestNG or Cucumber instead of JUnit 5.** Everything else stays the same (adapter, `healer.locator` / `healer.element`,
+`healer.properties`); only the test-framework hook changes:
+
+- **TestNG:** add `healer-testng`. The listener registers itself through `META-INF/services` - nothing else to do
+  (or declare it explicitly: `@Listeners(HealingTestNGListener.class)` / `<listener>` in testng.xml). Failures are
+  analysed right after the test method, before `@AfterMethod` closes the browser.
+- **Cucumber:** add `healer-cucumber` and the plugin to your runner:
+  `@ConfigurationParameter(key = PLUGIN_PROPERTY_NAME, value = "com.selfhealing.healer.cucumber.HealingCucumberPlugin")`
+  (JUnit Platform) or `plugin = "com.selfhealing.healer.cucumber.HealingCucumberPlugin"` (`@CucumberOptions`).
+  Each scenario is a test in the report and its Gherkin steps are report steps; a failing step is analysed before the
+  `@After` hooks close the browser.
 
 **4. Run the suite once against a working build** — this records the fingerprints (`.healer/`).
 From then on, broken locators are healed. Commit `.healer/` to share the baseline with your team.

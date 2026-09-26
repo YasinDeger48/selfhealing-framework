@@ -45,6 +45,8 @@
     <module>healer-playwright</module>
     <module>healer-claude</module>
     <module>healer-selenium</module>
+    <module>healer-testng</module>
+    <module>healer-cucumber</module>
   </modules>
 
   <properties>
@@ -56,6 +58,8 @@
     <slf4j.version>2.0.20</slf4j.version>
     <anthropic.version>2.65.0</anthropic.version>
     <selenium.version>4.49.0</selenium.version>
+    <testng.version>7.12.0</testng.version>
+    <cucumber.version>7.34.9</cucumber.version>
   </properties>
 
   <dependencyManagement>
@@ -79,6 +83,36 @@
         <groupId>io.github.yasindeger48</groupId>
         <artifactId>healer-selenium</artifactId>
         <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.yasindeger48</groupId>
+        <artifactId>healer-testng</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.yasindeger48</groupId>
+        <artifactId>healer-cucumber</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.testng</groupId>
+        <artifactId>testng</artifactId>
+        <version>${testng.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.cucumber</groupId>
+        <artifactId>cucumber-plugin</artifactId>
+        <version>${cucumber.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.cucumber</groupId>
+        <artifactId>cucumber-java</artifactId>
+        <version>${cucumber.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.cucumber</groupId>
+        <artifactId>cucumber-core</artifactId>
+        <version>${cucumber.version}</version>
       </dependency>
       <dependency>
         <groupId>org.seleniumhq.selenium</groupId>
