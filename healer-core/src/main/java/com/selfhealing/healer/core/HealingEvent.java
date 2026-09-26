@@ -26,6 +26,9 @@ public class HealingEvent {
     public Status status;
     public String originalSelector;
     public String healedSelector;
+    /** Where the locator was declared, relative to a source root (com/acme/pages/LoginPage.java). */
+    public String sourceFile;
+    public int sourceLine;
     public HealingSuggestion.Source source;
     public double confidence;
     public String reasoning;

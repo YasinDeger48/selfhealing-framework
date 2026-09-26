@@ -86,6 +86,20 @@ From then on, broken locators are healed. Commit `.healer/` to share the baselin
 4. The test continues; the report shows old/new selector, changed attributes, confidence, reasoning,
    a screenshot and the cost. If the original selector works again (application fixed), the cached heal is dropped.
 
+### Selectors that last
+
+A healed selector is only useful if it still works on the next build. Values with a generated part (6+ letters/digits
+including a digit, e.g. `booking-reference-fe465c1e`, `45901727`) are treated as unstable, and the new selector is
+chosen in this order: stable identifiers (`data-testid`, `id`, `data-qa`, `name`) → the stable prefix of a generated one
+(`[data-testid^='booking-reference-input-']`) → stable descriptive attributes (`aria-label`, `placeholder`, `title`) →
+the visible text of a button or link → the generated value → a structural path.
+
+### Cold start
+
+An element that was never seen working (a new test, or ids that change on every page load) has no recorded fingerprint.
+The healer then derives one from the selector itself (`#passenger-surname-fe465c1e` → id ≈ "passenger-surname" plus a
+generated part), heals with it, and stores the healed element's real fingerprint for the next runs.
+
 ### Protection against false positives
 
 A heal that points at the wrong element would hide a real bug, so the healer prefers failing the step:
@@ -133,10 +147,22 @@ At the end of the run, in `target/healer-report/`:
 | `healing-report.html` | Self-contained **Test Automation Report**: summary, "needs review" table with page-object fixes, test steps, and per heal the healing trace, a focused screenshot, changed attributes, candidates and cost. Sections open collapsed; a language menu switches the whole report (EN, DE, RU, JA, TR, AR) in the browser |
 | `healing-report.pdf` | The same report as PDF (printed with the installed Edge; the HTML also has a "Save as PDF" button) |
 | `healing-report.json` | Machine-readable data for CI |
+| `locator-fixes.patch` | Source-code fixes for the healed locators (unified diff) - see below |
 
 Claude's reasoning stays in the language of the run; everything else in the report follows the language menu.
 Every heal shows its cost: local and cached heals `$0.0000`, Claude heals with tokens and dollars.
 Rebuild the HTML/PDF from the JSON without re-running tests: `ReportCli [reportDir]`.
+
+### Code fixes
+
+The healer records where each locator is declared (`healer.locator(...)` call site) and finds the broken selector in the
+sources: Java/Kotlin/Groovy/Scala string literals and locator files (`.properties`, `.json`, `.yaml`). At the end of the run:
+
+- `locator-fixes.patch` replaces every selector whose location is unambiguous with its healed version - review it, then
+  `git apply target/healer-report/locator-fixes.patch`. Or run once with `-Dhealer.fix=apply` to write the changes directly.
+- Selectors that are built at runtime (`"#row-" + id`), written in several places, or healed differently by different tests
+  are listed as **manual** with the declaring file and line - they are never guessed.
+- The report has a **Code fixes** section, and each "needs review" row shows the file and line.
 
 ## Configuration — `healer.properties` on the test classpath (or `-D<name>=<value>`)
 
@@ -151,6 +177,9 @@ Rebuild the HTML/PDF from the JSON without re-running tests: `ReportCli [reportD
 | `healer.storeDir` | `.healer` | Fingerprints and healing cache |
 | `healer.reportDir` | `target/healer-report` | Report output |
 | `healer.failOnHeal` | `false` | `true`: a healed test fails (strict CI) |
+| `healer.fix` | `patch` | Code fixes: `patch` (write `locator-fixes.patch`), `apply` (change the source files), `off` |
+| `healer.fix.sourceDirs` | `src/test/java,src/main/java,…` | Where to look for selectors (also Kotlin/Groovy/Scala and `src/*/resources`) |
+| `healer.fix.extensions` | `java,kt,groovy,scala,properties,json,yaml,yml` | Files searched for selectors |
 | `healer.verbose` | `true` | Print every healing step to the console |
 | `healer.visual` | `false` | Draw the healing steps on the page (headed demos) |
 | `healer.visual.pauseMs` | `1200` | Pause between drawn steps |

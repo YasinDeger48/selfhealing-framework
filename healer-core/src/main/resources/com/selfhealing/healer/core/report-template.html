@@ -56,6 +56,10 @@
   .sel-new { color: var(--green); }
   .fix { background: #1e2433; color: #e6edf3; padding: 8px 10px; border-radius: 8px; white-space: pre-wrap; word-break: break-all; margin-top: 6px; }
   .fix .k { color: #ffa657; } .fix .s { color: #7ee787; }
+  #fixesCommand { margin: 0 0 12px; }
+  .pill.fix-READY { background: #e7f0ff; color: #1f4fbf; } .pill.fix-APPLIED { background: #e3f6e8; color: #1c7c3a; }
+  .pill.fix-MANUAL { background: #fff4e0; color: #9a5b00; }
+  .loc { font-size: 12px; color: var(--muted); }
 
   /* Pills */
   .pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap; }
@@ -217,6 +221,13 @@
     <div class="card" id="review"></div>
   </details>
 
+  <details class="section" id="fixesSection" hidden>
+    <summary><h2><span class="chev">&#9656;</span><span id="fixesTitle"></span> <span class="count" id="fixesCount"></span></h2></summary>
+    <p class="note" id="fixesNote"></p>
+    <div class="fix mono" dir="ltr" id="fixesCommand" hidden></div>
+    <div class="card" id="fixes"></div>
+  </details>
+
   <details class="section" id="testsSection">
     <summary><h2><span class="chev">&#9656;</span><span id="testsTitle"></span> <span class="count" id="testCount"></span></h2></summary>
     <div class="filters" id="filters"></div>
@@ -336,8 +347,14 @@ function renderKpis() {
     `<div class="kpi ${cls}"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${sub}</div>${extra}</div>`).join("");
 }
 
+const fixes = R.fixes || [];
+const fixFor = e => fixes.find(f => f.originalSelector === e.originalSelector);
+const locText = f => f && f.file ? f.file + (f.line ? ":" + f.line : "") : "";
+
 function fixSnippet(e) {
-  return `<div class="fix mono" dir="ltr"><span class="k">healer.locator</span>("${esc(e.key)}", <span class="s">"${esc(e.healedSelector)}"</span>)</div>`;
+  const f = fixFor(e);
+  const where = f && f.file ? `<div class="loc mono" dir="ltr">&#128196; ${esc(locText(f))} <span class="pill fix-${f.status}">${L("fix." + f.status)}</span></div>` : "";
+  return where + `<div class="fix mono" dir="ltr"><span class="k">healer.locator</span>("${esc(e.key)}", <span class="s">"${esc(e.healedSelector)}"</span>)</div>`;
 }
 
 function renderReview() {
@@ -364,6 +381,33 @@ function renderReview() {
       <td colspan="4"><div class="mono sel-old" dir="ltr">${esc(e.originalSelector)}</div><div class="error">${esc(e.reasoning)}</div></td></tr>`).join("");
   document.getElementById("review").innerHTML =
     `<table><thead><tr><th style="width:24%">${L("col.element")}</th><th>${L("col.selectors")}</th><th>${L("col.source")}</th><th>${L("col.confidence")}</th><th>${L("col.cost")}</th></tr></thead><tbody>${rows}${failRows}</tbody></table>`;
+}
+
+function fixNote(f) {
+  if (!f.note) return "";
+  if (f.note.startsWith("ambiguous:")) return L("fixNote.ambiguous", f.note.slice(10));
+  return L("fixNote." + f.note);
+}
+
+function renderFixes() {
+  const section = document.getElementById("fixesSection");
+  section.hidden = !fixes.length;
+  if (!fixes.length) return;
+  document.getElementById("fixesTitle").textContent = L("fixes");
+  const ready = fixes.filter(f => f.status === "READY").length;
+  const applied = fixes.filter(f => f.status === "APPLIED").length;
+  document.getElementById("fixesCount").textContent = fixes.length;
+  document.getElementById("fixesNote").textContent = R.fixMode === "apply" ? L("fixesNoteApplied", applied) : L("fixesNote", ready);
+  const cmd = document.getElementById("fixesCommand");
+  cmd.hidden = !(R.fixPatch && ready);
+  if (R.fixPatch) cmd.innerHTML = `<span class="k">git apply</span> <span class="s">${esc(R.fixPatch)}</span>`;
+  const rows = fixes.map(f => `<tr><td><span class="pill fix-${f.status}">${L("fix." + f.status)}</span></td>
+      <td><b>${esc(f.key)}</b><div class="loc mono" dir="ltr">${esc(locText(f)) || "-"}</div></td>
+      <td><div class="mono sel-old" dir="ltr">${esc(f.originalSelector)}</div><div class="mono sel-new" dir="ltr">&#8594; ${esc(f.healedSelector)}</div>
+      ${f.note ? `<div class="tmeta">${esc(fixNote(f))}</div>` : ""}</td>
+      <td class="tmeta">${L("inTests", (f.tests || []).length)}</td></tr>`).join("");
+  document.getElementById("fixes").innerHTML =
+    `<table><thead><tr><th style="width:11%">${L("fix.col.status")}</th><th style="width:30%">${L("fix.col.location")}</th><th>${L("fix.col.change")}</th><th style="width:12%"></th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function traceLine(l) {
@@ -450,7 +494,7 @@ function renderFilters() {
 }
 
 function renderAll() {
-  renderStatic(); renderMeta(); renderKpis(); renderReview(); renderFilters(); renderTests();
+  renderStatic(); renderMeta(); renderKpis(); renderReview(); renderFixes(); renderFilters(); renderTests();
 }
 
 let allOpen = false;

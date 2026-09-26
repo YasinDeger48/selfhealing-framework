@@ -4,6 +4,7 @@ import com.selfhealing.healer.core.HealerConfig;
 import com.selfhealing.healer.core.HealingEvent;
 import com.selfhealing.healer.core.HealingRecorder;
 import com.selfhealing.healer.core.LlmPricing;
+import com.selfhealing.healer.core.LocatorFixer;
 import com.selfhealing.healer.core.ReportParts;
 import com.selfhealing.healer.core.ReportWriter;
 import org.junit.jupiter.api.extension.AfterEachCallback;
@@ -87,6 +88,36 @@ public class HealingExtension implements BeforeEachCallback, AfterEachCallback, 
         return context.getRequiredTestClass().getSimpleName() + "." + context.getRequiredTestMethod().getName();
     }
 
+    /** Source-code fixes for the healed locators: a patch to review, or applied directly (healer.fix=apply). */
+    static void codeFixes(HealerConfig config, List<HealingEvent> events, Map<String, Object> model) {
+        if (!LocatorFixer.enabled(config) || events.isEmpty()) return;
+        try {
+            Path project = Path.of("").toAbsolutePath();
+            LocatorFixer.Plan plan = LocatorFixer.plan(events, config, project);
+            if (plan.fixes().isEmpty()) return;
+            Path patch = LocatorFixer.writePatch(config.reportDir(), plan);
+            if (LocatorFixer.applyMode(config)) plan = LocatorFixer.apply(plan, events, config, project);
+            model.put("fixes", plan.fixes());
+            if (patch != null) model.put("fixPatch", project.relativize(patch.toAbsolutePath()).toString().replace('\\', '/'));
+            model.put("fixMode", LocatorFixer.applyMode(config) ? "apply" : "patch");
+
+            StringBuilder sb = new StringBuilder("[healer] Code fixes:");
+            for (LocatorFixer.Fix f : plan.fixes()) {
+                sb.append("\n   ").append(String.format("%-7s", f.status())).append(' ')
+                  .append(f.file() == null ? "?" : f.file() + (f.line() > 0 ? ":" + f.line() : ""))
+                  .append("  ").append(f.originalSelector()).append("  ->  ").append(f.healedSelector())
+                  .append(f.note() == null ? "" : "  (" + f.noteText() + ")");
+            }
+            if (patch != null && !LocatorFixer.applyMode(config)) {
+                sb.append("\n   Review and apply: git apply ").append(project.relativize(patch.toAbsolutePath()).toString().replace('\\', '/'))
+                  .append("   (or run once with -Dhealer.fix=apply)");
+            }
+            System.out.println(sb);
+        } catch (RuntimeException e) {
+            System.out.println("[healer] Code fixes skipped: " + e.getMessage());   // never fail the run over this
+        }
+    }
+
     /** Closed by JUnit when the root context ends, i.e. once after all tests. */
     @SuppressWarnings("deprecation")
     static final class ReportFlusher implements ExtensionContext.Store.CloseableResource, AutoCloseable {
@@ -101,6 +132,7 @@ public class HealingExtension implements BeforeEachCallback, AfterEachCallback, 
             List<HealingEvent> events = HealingRecorder.all();
             String runId = config.get("healer.runId", "");
             Map<String, Object> model;
+            List<HealingEvent> runEvents = events;
             if (runId.isBlank()) {
                 model = ReportWriter.model(events, HealingRecorder.tests(), config);
             } else {
@@ -108,7 +140,9 @@ public class HealingExtension implements BeforeEachCallback, AfterEachCallback, 
                 ReportParts.Merged merged = ReportParts.writeAndMerge(reportDir, runId, events, HealingRecorder.tests(),
                         HealingRecorder.runStartedAt());
                 model = ReportWriter.model(merged.events(), merged.tests(), config, merged.runStartedAt());
+                runEvents = merged.events();
             }
+            codeFixes(config, runEvents, model);
             ReportWriter.writeJson(reportDir, model);
             Path html = ReportWriter.writeHtml(reportDir, model);
             System.out.println(ReportWriter.consoleSummary(events, html));
