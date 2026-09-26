@@ -112,22 +112,72 @@
     return found !== null && found.length === 1;
   },
 
+  /** :text-is() is Playwright-only, so uniqueness is checked here: one element of this tag with exactly this text. */
+  uniqueText(el, text) {
+    const same = this.deepAll(el.tagName.toLowerCase());
+    return same !== null && same.filter(e => this.text(e) === text).length === 1;
+  },
+
   q(v) {
     return '"' + String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
   },
 
-  /** Shortest stable selector that matches only this element (Playwright syntax, pierces shadow DOM). */
+  /** A random-looking token: 6+ letters/digits with at least one digit (fe465c1e, 45901727) - same rule as Similarity. */
+  GENERATED: /^(?=[a-z]*\d)[a-z0-9]{6,}$/i,
+
+  isGenerated(v) {
+    return String(v).split(/[^a-zA-Z0-9]+/).some(t => this.GENERATED.test(t));
+  },
+
+  /** "booking-reference-input-35b8d6a1" -> "booking-reference-input-"; null when too little is left. */
+  stablePrefix(v) {
+    const parts = String(v).split(/([^a-zA-Z0-9]+)/);   // tokens at even, separators at odd indexes
+    let prefix = "";
+    for (let i = 0; i < parts.length; i++) {
+      if (i % 2 === 0 && this.GENERATED.test(parts[i])) break;
+      prefix += parts[i];
+    }
+    return prefix !== v && prefix.replace(/[^a-zA-Z0-9]/g, "").length >= 4 ? prefix : null;
+  },
+
+  /**
+   * Shortest stable selector that matches only this element (Playwright syntax, pierces shadow DOM).
+   * Values with a generated part (ids that change on every build or page load) are used last:
+   * first stable attributes, then the stable prefix of a generated one, then the visible text.
+   */
   uniqueSelector(el) {
     const tag = el.tagName.toLowerCase();
-    const tries = [];
-    const tid = el.getAttribute("data-testid");
-    if (tid) tries.push("[data-testid=" + this.q(tid) + "]");
-    if (el.id) tries.push("#" + CSS.escape(el.id));
-    for (const a of ["data-qa", "name", "aria-label", "placeholder", "title"]) {
-      const v = el.getAttribute(a);
-      if (v) { tries.push("[" + a + "=" + this.q(v) + "]"); tries.push(tag + "[" + a + "=" + this.q(v) + "]"); }
+    // Tiers, most stable first: identifiers, then descriptive attributes; each exact, then by stable prefix.
+    const tiers = { identity: [], identityPrefix: [], described: [], describedPrefix: [], generated: [] };
+    const add = (a, v, identity) => {
+      if (!v) return;
+      const exact = a === "id" ? "#" + CSS.escape(v) : "[" + a + "=" + this.q(v) + "]";
+      const withTag = a === "data-testid" || a === "id" ? [exact] : [exact, tag + exact];
+      if (!this.isGenerated(v)) {
+        tiers[identity ? "identity" : "described"].push(...withTag);
+        return;
+      }
+      const prefix = this.stablePrefix(v);
+      if (prefix) {
+        const p = "[" + a + "^=" + this.q(prefix) + "]";
+        tiers[identity ? "identityPrefix" : "describedPrefix"].push(p, tag + p);
+      }
+      tiers.generated.push(exact);
+    };
+    add("data-testid", el.getAttribute("data-testid"), true);
+    add("id", el.id, true);
+    for (const a of ["data-qa", "name"]) add(a, el.getAttribute(a), true);
+    for (const a of ["aria-label", "placeholder", "title"]) add(a, el.getAttribute(a), false);
+
+    for (const s of [...tiers.identity, ...tiers.identityPrefix, ...tiers.described, ...tiers.describedPrefix]) {
+      if (this.unique(s)) return s;
     }
-    for (const s of tries) if (this.unique(s)) return s;
+    // Short visible text of a clickable element, when no attribute identifies it.
+    const text = this.text(el);
+    if (text && text.length <= 40 && ["BUTTON", "A"].includes(el.tagName) && this.uniqueText(el, text)) {
+      return tag + ":text-is(" + this.q(text) + ")";
+    }
+    for (const s of tiers.generated) if (this.unique(s)) return s;
 
     // Path from the nearest uniquely identifiable ancestor inside the same root.
     const root = el.getRootNode();

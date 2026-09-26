@@ -80,6 +80,28 @@ class SelfHealingPageIntegrationTest {
     }
 
     @Test
+    void healedSelectorAvoidsGeneratedIdParts() {
+        String form = "<input id='coupon-%1$s' placeholder='Coupon'>"
+                + "<button type='button' id='pay-%1$s' data-testid='pay-button-%1$s'>Pay now</button>"
+                + "<button type='button' id='back-%1$s'>Back</button>";
+        page.setContent(String.format(form, "a1b2c3d4"));
+        healer.locator("Checkout.pay", "#pay-a1b2c3d4").click();
+
+        // A new build / page load: every id gets a new random suffix.
+        page.setContent(String.format(form, "e5f6a7b8"));
+        healer.locator("Checkout.pay", "#pay-a1b2c3d4").click();
+        HealingEvent e = lastEvent("Checkout.pay");
+        assertEquals(HealingEvent.Status.HEALED, e.status);
+        assertEquals("[data-testid^=\"pay-button-\"]", e.healedSelector, "the stable part, not the random suffix");
+
+        // The next load still works with the same healed selector - no new heal needed.
+        page.setContent(String.format(form, "9c8d7e6f"));
+        healer.locator("Checkout.pay", "#pay-a1b2c3d4").click();
+        assertEquals(1, HealingRecorder.eventsFor(test).stream().filter(x -> x.key.equals("Checkout.pay")).count(),
+                "the heal is reused on the next load, not repeated");
+    }
+
+    @Test
     void elementInsideShadowDomIsHealed() {
         page.setContent("<newsletter-box></newsletter-box><script>"
                 + "customElements.define('newsletter-box', class extends HTMLElement { connectedCallback() {"
