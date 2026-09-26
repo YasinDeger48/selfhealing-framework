@@ -98,6 +98,7 @@ public final class LocatorFixer {
 
         // One fix per broken selector, however many tests used it.
         Map<String, List<HealingEvent>> bySelector = events.stream()
+                .filter(e -> e.kind == null)   // popups are not selector changes
                 .filter(e -> (e.status == HealingEvent.Status.HEALED || e.status == HealingEvent.Status.SUGGESTED)
                         && e.healedSelector != null && e.originalSelector != null)
                 .collect(Collectors.groupingBy(e -> e.originalSelector, LinkedHashMap::new, Collectors.toList()));
@@ -174,9 +175,13 @@ public final class LocatorFixer {
     }
 
     public static Path writePatch(Path reportDir, Plan plan) {
+        return writePatch(reportDir, plan, PATCH_FILE);
+    }
+
+    public static Path writePatch(Path reportDir, Plan plan, String fileName) {
         try {
             Files.createDirectories(reportDir);
-            Path file = reportDir.resolve(PATCH_FILE);
+            Path file = reportDir.resolve(fileName);
             if (plan.patch().isEmpty()) {
                 Files.deleteIfExists(file);
                 return null;
@@ -184,7 +189,7 @@ public final class LocatorFixer {
             Files.writeString(file, plan.patch(), StandardCharsets.UTF_8);
             return file;
         } catch (IOException e) {
-            throw new UncheckedIOException("Cannot write " + PATCH_FILE, e);
+            throw new UncheckedIOException("Cannot write " + fileName, e);
         }
     }
 
@@ -243,6 +248,11 @@ public final class LocatorFixer {
             if (inFile.size() > 1) return null;
         }
         return found.size() == 1 ? found.get(0) : null;
+    }
+
+    /** A source-root relative path (com/acme/LoginPage.java) as a project path, for display. */
+    public static String projectPath(String sourceFile, HealerConfig config, Path projectDir) {
+        return projectPath(sourceFile, sourceFiles(config, projectDir), projectDir);
     }
 
     /** com/acme/LoginPage.java -> src/test/java/com/acme/LoginPage.java when that file is among the sources. */

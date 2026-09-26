@@ -51,6 +51,16 @@ public class HealingTrace implements HealingListener {
         return ranked.stream().limit(SHOWN_CANDIDATES).toList();
     }
 
+    /** A line from outside the healing pipeline (e.g. popup handling); {@code key} is a message key. */
+    public void note(String kind, String key, Object... args) {
+        msg(kind, key, args);
+    }
+
+    /** A section title such as "---- LoginPage.username ----". */
+    public void title(String text) {
+        add("title", "---- " + text + " " + "-".repeat(Math.max(3, 56 - text.length())));
+    }
+
     private void add(String kind, String text) {
         emit(new Line(kind, text, null, null));
     }

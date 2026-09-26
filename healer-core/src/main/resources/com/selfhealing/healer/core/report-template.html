@@ -60,6 +60,10 @@
   .pill.fix-READY { background: #e7f0ff; color: #1f4fbf; } .pill.fix-APPLIED { background: #e3f6e8; color: #1c7c3a; }
   .pill.fix-MANUAL { background: #fff4e0; color: #9a5b00; }
   .loc { font-size: 12px; color: var(--muted); }
+  .pill.popup { background: #fff0f6; color: #a61e4d; }
+  .pill.risk-HIGH { background: #ffe3e3; color: #c92a2a; } .pill.risk-MEDIUM { background: #fff4e0; color: #9a5b00; }
+  .pill.risk-LOW { background: #e7f5ff; color: #1864ab; } .pill.risk-OK { background: #e3f6e8; color: #1c7c3a; }
+  #qualityCommand { margin: 0 0 12px; } .reasons { font-size: 12px; color: var(--muted); margin-top: 3px; }
 
   /* Pills */
   .pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap; }
@@ -228,6 +232,14 @@
     <div class="card" id="fixes"></div>
   </details>
 
+  <details class="section" id="qualitySection" hidden>
+    <summary><h2><span class="chev">&#9656;</span><span id="qualityTitle"></span> <span class="count" id="qualityCount"></span></h2></summary>
+    <p class="note" id="qualityNote"></p>
+    <div class="filters" id="qualityChips"></div>
+    <div class="fix mono" dir="ltr" id="qualityCommand" hidden></div>
+    <div class="card" id="quality"></div>
+  </details>
+
   <details class="section" id="testsSection">
     <summary><h2><span class="chev">&#9656;</span><span id="testsTitle"></span> <span class="count" id="testCount"></span></h2></summary>
     <div class="filters" id="filters"></div>
@@ -282,6 +294,7 @@ const tests = (R.tests || []).map(t => {
 const kind = t => t.status === "FAILED" ? "fail" : (t.healed.length ? "warn" : "pass");
 
 function sourcePill(e) {
+  if (e.kind === "popup") return `<span class="pill popup">&#129695; ${L("src.POPUP")}${e.reused ? " · " + L("reusedTag") : ""}</span>`;
   if (!e.source) return "";
   const reused = e.reused ? " · " + L("reusedTag") : "";
   return `<span class="pill ${sourceClass[e.source]}">${srcLabel(e.source)}${reused}</span>`;
@@ -360,10 +373,11 @@ function fixSnippet(e) {
 function renderReview() {
   const unique = new Map();
   events.filter(e => e.status !== "FAILED").forEach(e => {
-    const u = unique.get(e.key) || { first: null, tests: new Set(), cost: 0 };
+    const id = (e.kind || "locator") + " " + e.key;
+    const u = unique.get(id) || { first: null, tests: new Set(), cost: 0 };
     if (!u.first || (u.first.reused && !e.reused)) u.first = e;
     u.tests.add(e.test); u.cost += e.llmCostUsd || 0;
-    unique.set(e.key, u);
+    unique.set(id, u);
   });
   const failed = events.filter(e => e.status === "FAILED");
   document.getElementById("reviewCount").textContent = unique.size + failed.length;
@@ -371,8 +385,14 @@ function renderReview() {
     document.getElementById("review").innerHTML = `<div class="empty">&#127881; ${L("reviewEmpty")}</div>`;
     return;
   }
-  const rows = [...unique.entries()].map(([key, u]) => {
-    const e = u.first;
+  const rows = [...unique.values()].map(u => {
+    const e = u.first, key = e.key;
+    if (e.kind === "popup") {
+      return `<tr><td><b>${esc(key)}</b><div class="tmeta">${L("inTests", u.tests.size)}</div></td>
+      <td><div class="mono sel-old" dir="ltr">${esc(e.originalElement)}</div><div class="mono sel-new" dir="ltr">&#8594; ${esc(e.healedElement)}</div>
+      <div class="tmeta">${L("popupRow")}</div></td>
+      <td>${sourcePill({ ...e, reused: false })}</td><td class="mono">${(e.confidence || 0).toFixed(2)}</td><td>${costPill(u.cost)}</td></tr>`;
+    }
     return `<tr><td><b>${esc(key)}</b><div class="tmeta">${L("inTests", u.tests.size)}</div></td>
       <td><div class="mono sel-old" dir="ltr">${esc(e.originalSelector)}</div><div class="mono sel-new" dir="ltr">&#8594; ${esc(e.healedSelector)}</div>${fixSnippet(e)}</td>
       <td>${sourcePill({ ...e, reused: false })}</td><td class="mono">${(e.confidence || 0).toFixed(2)}</td><td>${costPill(u.cost)}</td></tr>`;
@@ -410,6 +430,36 @@ function renderFixes() {
     `<table><thead><tr><th style="width:11%">${L("fix.col.status")}</th><th style="width:30%">${L("fix.col.location")}</th><th>${L("fix.col.change")}</th><th style="width:12%"></th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
+function renderQuality() {
+  const q = R.locatorQuality || [];
+  const section = document.getElementById("qualitySection");
+  section.hidden = !q.length;
+  if (!q.length) return;
+  const risky = q.filter(e => e.risk !== "OK");
+  const count = r => q.filter(e => e.risk === r).length;
+  document.getElementById("qualityTitle").textContent = L("quality");
+  document.getElementById("qualityCount").textContent = risky.length + " / " + q.length;
+  document.getElementById("qualityNote").textContent = L("qualityNote");
+  document.getElementById("qualityChips").innerHTML = ["HIGH", "MEDIUM", "LOW", "OK"].map(r =>
+    `<span class="pill risk-${r}">${L("risk." + r)}: ${count(r)}</span>`).join(" ");
+  const cmd = document.getElementById("qualityCommand");
+  cmd.hidden = !R.improvePatch;
+  if (R.improvePatch) cmd.innerHTML = `<span class="k">git apply</span> <span class="s">${esc(R.improvePatch)}</span>`;
+  if (!risky.length) {
+    document.getElementById("quality").innerHTML = `<div class="empty">&#10004; ${L("qualityAllOk")}</div>`;
+    return;
+  }
+  const rows = risky.map(e => `<tr><td><span class="pill risk-${e.risk}">${L("risk." + e.risk)}</span></td>
+      <td><b>${esc(e.key)}</b><div class="loc mono" dir="ltr">${esc(e.sourceFile ? e.sourceFile + (e.sourceLine ? ":" + e.sourceLine : "") : "")}</div>
+        ${e.broken ? `<span class="pill fail">${L("qualityBroken")}</span>` : ""}</td>
+      <td><div class="mono sel-old" dir="ltr" style="text-decoration:none">${esc(e.selector)}</div>
+        ${e.suggestion ? `<div class="mono sel-new" dir="ltr">&#8594; ${esc(e.suggestion)}</div>` : ""}
+        <div class="reasons">${(e.reasons || []).map(r => L("lint." + r)).join(" · ")}</div></td>
+      <td class="tmeta">${L("inTests", (e.tests || []).length)}</td></tr>`).join("");
+  document.getElementById("quality").innerHTML =
+    `<table><thead><tr><th style="width:10%">${L("quality.col.risk")}</th><th style="width:28%">${L("fix.col.location")}</th><th>${L("quality.col.selector")}</th><th style="width:12%"></th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
 function traceLine(l) {
   return `<div class="${esc(l.kind)}">${esc(l.key ? T(l.key, l.args) : l.text)}</div>`;
 }
@@ -437,7 +487,9 @@ function renderHeal(e) {
   const reason = e.source === "LLM" && e.reasoning ? `<div class="reason"><b>${L("reasoning")}</b> ${esc(e.reasoning)}${note}</div>` : "";
   const failed = e.status === "FAILED";
   const suggested = e.status === "SUGGESTED";
-  const title = failed ? "&#10060; " + L("healFailed", esc(e.key))
+  const popup = e.kind === "popup";
+  const title = popup ? (failed ? "&#10060; " + L("popupFailed", esc(e.key)) : "&#129695; " + L("popupHealed", esc(e.key)))
+              : failed ? "&#10060; " + L("healFailed", esc(e.key))
               : suggested ? "&#128161; " + L("healSuggested", esc(e.key))
               : "&#9888; " + L("healed", esc(e.key));
   return `<details class="heal${suggested ? " suggested" : ""}" data-id="h${e.id}" ${failed || suggested ? "open" : ""}>
@@ -494,7 +546,7 @@ function renderFilters() {
 }
 
 function renderAll() {
-  renderStatic(); renderMeta(); renderKpis(); renderReview(); renderFixes(); renderFilters(); renderTests();
+  renderStatic(); renderMeta(); renderKpis(); renderReview(); renderFixes(); renderQuality(); renderFilters(); renderTests();
 }
 
 let allOpen = false;

@@ -79,6 +79,11 @@ public final class Similarity {
     // A generated token: 6+ letters/digits with at least one digit (fe465c1e, 45901727, a1b2c3).
     private static final java.util.regex.Pattern GENERATED = java.util.regex.Pattern.compile("(?=[a-z]*\\d)[a-z0-9]{6,}");
 
+    /** True for a random-looking token such as fe465c1e or 45901727 (6+ letters/digits, at least one digit). */
+    public static boolean isGenerated(String token) {
+        return token != null && GENERATED.matcher(token.toLowerCase(Locale.ROOT)).matches();
+    }
+
     /** The identifier with random-looking tokens removed, e.g. "booking-reference-fe465c1e" -> "booking reference". */
     static String withoutGenerated(String s) {
         return Arrays.stream(normalize(s).split("[^a-z0-9]+"))

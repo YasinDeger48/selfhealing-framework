@@ -23,6 +23,8 @@ public class HealingEvent {
     public int id;
     public String test;
     public String key;
+    /** null = a healed locator; "popup" = a layer covering the element was dismissed. */
+    public String kind;
     public Status status;
     public String originalSelector;
     public String healedSelector;
@@ -60,6 +62,11 @@ public class HealingEvent {
     }
 
     public String summaryLine() {
+        if ("popup".equals(kind)) {
+            return status == Status.FAILED
+                    ? String.format("POPUP %s: '%s' could not be closed", key, originalElement)
+                    : String.format("POPUP %s: closed '%s' via '%s'", key, originalElement, healedElement);
+        }
         return switch (status) {
             case HEALED, SUGGESTED -> String.format("%s %s: '%s' -> '%s' (%s, confidence %.2f)",
                     status, key, originalSelector, healedSelector, source, confidence);

@@ -45,7 +45,8 @@ public final class ReportWriter {
         summary.put("suggested", count(events, HealingEvent.Status.SUGGESTED));
         summary.put("healFailed", count(events, HealingEvent.Status.FAILED));
         summary.put("uniqueElements", events.stream().map(e -> e.key).distinct().count());
-        summary.put("bySource", events.stream().filter(e -> e.source != null && !e.reused)
+        summary.put("popups", events.stream().filter(e -> "popup".equals(e.kind) && e.status == HealingEvent.Status.HEALED).count());
+        summary.put("bySource", events.stream().filter(e -> e.source != null && !e.reused && e.kind == null)
                 .collect(Collectors.groupingBy(e -> e.source.name(), LinkedHashMap::new, Collectors.counting())));
         summary.put("llmCalls", events.stream().filter(e -> e.llmModel != null && !e.reused).count());
         summary.put("llmInputTokens", events.stream().filter(e -> !e.reused).mapToLong(e -> e.llmInputTokens).sum());

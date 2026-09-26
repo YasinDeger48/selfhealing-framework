@@ -55,7 +55,7 @@ class ConcurrencyTest {
         HealingRecorder.TestRecord myTest = new HealingRecorder.TestRecord();
         myTest.id = "MyTest.b";
 
-        ReportParts.Merged merged = ReportParts.writeAndMerge(dir, "run42", List.of(mine), List.of(myTest),
+        ReportParts.Merged merged = ReportParts.writeAndMerge(dir, "run42", List.of(mine), List.of(myTest), List.of(),
                 Instant.parse("2026-01-01T10:05:00Z"));
 
         assertEquals(2, merged.events().size());

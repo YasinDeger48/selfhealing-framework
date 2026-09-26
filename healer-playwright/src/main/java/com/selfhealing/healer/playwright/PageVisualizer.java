@@ -125,6 +125,21 @@ class PageVisualizer implements HealingListener {
         }
     }
 
+    /** A layer covers the element: frame the layer and its closing button before it is clicked. */
+    void popup(PopupGuard.Obstruction o) {
+        clearBoxes();
+        log(get("vis.popup.blocked", esc(o.layer())), ORANGE);
+        box(o.layerSelector(), "POPUP", ORANGE, false);
+        if (o.buttonSelector() != null) {
+            box(o.buttonSelector(), "CLOSE", GREEN, true);
+            log(get("vis.popup.close", esc(o.button())), GREEN);
+        } else {
+            log(get("vis.popup.escape"), GREEN);
+        }
+        pause(2);
+        clearBoxes();
+    }
+
     /** Frames an element in green (used for report screenshots, also when the overlay is off). */
     static void highlight(PlaywrightPageAdapter scope, String selector, String label) {
         // The demo panel is hidden while the report screenshot is taken; its lines are in the report anyway.

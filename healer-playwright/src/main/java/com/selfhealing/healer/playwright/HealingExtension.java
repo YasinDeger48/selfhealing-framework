@@ -5,6 +5,8 @@ import com.selfhealing.healer.core.HealingEvent;
 import com.selfhealing.healer.core.HealingRecorder;
 import com.selfhealing.healer.core.LlmPricing;
 import com.selfhealing.healer.core.LocatorFixer;
+import com.selfhealing.healer.core.LocatorQuality;
+import com.selfhealing.healer.core.SelectorLint;
 import com.selfhealing.healer.core.ReportParts;
 import com.selfhealing.healer.core.ReportWriter;
 import org.junit.jupiter.api.extension.AfterEachCallback;
@@ -118,6 +120,32 @@ public class HealingExtension implements BeforeEachCallback, AfterEachCallback, 
         }
     }
 
+    /** The "Locator quality" section and locator-improvements.patch (suggestions only - never applied automatically). */
+    static void locatorQuality(HealerConfig config, List<LocatorQuality.Entry> quality, Map<String, Object> model) {
+        if (quality.isEmpty()) return;
+        try {
+            List<LocatorQuality.Entry> sorted = LocatorQuality.sorted(quality);
+            Path project = Path.of("").toAbsolutePath();
+            sorted.forEach(e -> e.sourceFile = LocatorFixer.projectPath(e.sourceFile, config, project));
+            model.put("locatorQuality", sorted);
+            Map<SelectorLint.Risk, Long> counts = new java.util.EnumMap<>(SelectorLint.Risk.class);
+            sorted.forEach(e -> counts.merge(e.risk, 1L, Long::sum));
+            long suggested = sorted.stream().filter(e -> e.suggestion != null && !e.broken).count();
+
+            LocatorFixer.Plan plan = LocatorFixer.plan(LocatorQuality.asImprovements(sorted), config, project);
+            Path patch = LocatorFixer.writePatch(config.reportDir(), plan, "locator-improvements.patch");
+            String patchPath = patch == null ? null : project.relativize(patch.toAbsolutePath()).toString().replace('\\', '/');
+            if (patchPath != null) model.put("improvePatch", patchPath);
+
+            System.out.printf("[healer] Locator quality: %d high, %d medium, %d low risk of %d locators; %d more stable selector(s) suggested%s%n",
+                    counts.getOrDefault(SelectorLint.Risk.HIGH, 0L), counts.getOrDefault(SelectorLint.Risk.MEDIUM, 0L),
+                    counts.getOrDefault(SelectorLint.Risk.LOW, 0L), sorted.size(), suggested,
+                    patchPath == null ? "" : " -> review, then: git apply " + patchPath);
+        } catch (RuntimeException e) {
+            System.out.println("[healer] Locator quality skipped: " + e.getMessage());
+        }
+    }
+
     /** Closed by JUnit when the root context ends, i.e. once after all tests. */
     @SuppressWarnings("deprecation")
     static final class ReportFlusher implements ExtensionContext.Store.CloseableResource, AutoCloseable {
@@ -133,16 +161,19 @@ public class HealingExtension implements BeforeEachCallback, AfterEachCallback, 
             String runId = config.get("healer.runId", "");
             Map<String, Object> model;
             List<HealingEvent> runEvents = events;
+            List<LocatorQuality.Entry> quality = LocatorQuality.all();
             if (runId.isBlank()) {
                 model = ReportWriter.model(events, HealingRecorder.tests(), config);
             } else {
                 // Several JVMs (forkCount > 1): every JVM adds its part; the last one writes the complete report.
                 ReportParts.Merged merged = ReportParts.writeAndMerge(reportDir, runId, events, HealingRecorder.tests(),
-                        HealingRecorder.runStartedAt());
+                        quality, HealingRecorder.runStartedAt());
                 model = ReportWriter.model(merged.events(), merged.tests(), config, merged.runStartedAt());
                 runEvents = merged.events();
+                quality = merged.quality();
             }
             codeFixes(config, runEvents, model);
+            locatorQuality(config, quality, model);
             ReportWriter.writeJson(reportDir, model);
             Path html = ReportWriter.writeHtml(reportDir, model);
             System.out.println(ReportWriter.consoleSummary(events, html));

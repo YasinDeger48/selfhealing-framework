@@ -33,12 +33,12 @@ public class HealingLocator {
         return owner.resolve(key, selector);
     }
 
-    public void click() { step("click", "", l -> { l.click(); return null; }); }
-    public void fill(String value) { step("fill", "'" + mask(value) + "'", l -> { l.fill(value); return null; }); }
-    public void check() { step("check", "", l -> { l.check(); return null; }); }
-    public void uncheck() { step("uncheck", "", l -> { l.uncheck(); return null; }); }
-    public void selectOption(String value) { step("select", "'" + value + "'", l -> { l.selectOption(value); return null; }); }
-    public void press(String keys) { step("press", keys, l -> { l.press(keys); return null; }); }
+    public void click() { interact("click", "", l -> { l.click(); return null; }); }
+    public void fill(String value) { interact("fill", "'" + mask(value) + "'", l -> { l.fill(value); return null; }); }
+    public void check() { interact("check", "", l -> { l.check(); return null; }); }
+    public void uncheck() { interact("uncheck", "", l -> { l.uncheck(); return null; }); }
+    public void selectOption(String value) { interact("select", "'" + value + "'", l -> { l.selectOption(value); return null; }); }
+    public void press(String keys) { interact("press", keys, l -> { l.press(keys); return null; }); }
     public String textContent() { return step("read", Messages.get("step.text"), Locator::textContent); }
     public String innerText() { return step("read", Messages.get("step.text"), Locator::innerText); }
     public String inputValue() { return step("read", Messages.get("step.value"), Locator::inputValue); }
@@ -56,13 +56,22 @@ public class HealingLocator {
     public String key() { return key; }
     public String selector() { return selector; }
 
+    /** An action that needs the element on top: a covering layer (cookie banner, modal ...) is closed first. */
+    private <T> T interact(String action, String detail, Function<Locator, T> body) {
+        return step(action, detail, l -> {
+            owner.clearObstruction(key, selector, l);
+            return body.apply(l);
+        });
+    }
+
     /** Resolves (healing if needed), runs the action and records the step, linked to the heal if there was one. */
     private <T> T step(String action, String detail, Function<Locator, T> body) {
         HealingRecorder.Step step = HealingRecorder.step(key, action, detail);
         try {
             Locator locator = raw();
-            linkHeal(step);
-            return body.apply(locator);
+            T result = body.apply(locator);
+            linkHeal(step);   // after the action: a popup closed during it is linked too
+            return result;
         } catch (RuntimeException e) {
             linkHeal(step);
             step.status = "FAILED";

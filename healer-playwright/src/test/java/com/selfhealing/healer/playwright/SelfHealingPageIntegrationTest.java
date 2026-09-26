@@ -101,6 +101,69 @@ class SelfHealingPageIntegrationTest {
                 "the heal is reused on the next load, not repeated");
     }
 
+    private long popups() {
+        return HealingRecorder.eventsFor(test).stream().filter(e -> "popup".equals(e.kind)).count();
+    }
+
+    private static final String SAVE_FORM = "<button type='button' id='save' onclick=\"this.textContent='Saved'\">Save</button>";
+
+    @Test
+    void cookieBannerCoveringTheElementIsClosed() {
+        page.setContent("<body style='margin:0'><div style='height:80vh'></div>" + SAVE_FORM
+                + "<div id='consent' style='position:fixed;left:0;right:0;bottom:0;height:45vh;background:#eee'>We use cookies."
+                + "<button onclick=\"alert('no')\" style='display:none'>Hidden</button>"
+                + "<button onclick=\"document.getElementById('consent').remove()\">Reject all</button>"
+                + "<button onclick=\"document.getElementById('consent').remove()\">Accept all</button></div></body>");
+
+        healer.locator("Form.save", "#save").click();
+
+        assertEquals("Saved", page.locator("#save").textContent());
+        HealingEvent e = lastEvent("Form.save");
+        assertEquals("popup", e.kind);
+        assertEquals(HealingEvent.Status.HEALED, e.status);
+        assertTrue(e.healedElement.contains("accept all"), e.healedElement);
+    }
+
+    @Test
+    void modalIsClosedWithItsIconButtonNeverWithADangerousOne() {
+        page.setContent(SAVE_FORM
+                + "<div id='modal' role='dialog' aria-modal='true' style='position:fixed;inset:0;background:rgba(0,0,0,.4)'>"
+                + "<div style='background:#fff;margin:100px auto;width:300px'>Get 10% off!"
+                + "<button onclick=\"document.body.dataset.subscribed='yes'\">Subscribe</button>"
+                + "<button aria-label='Close' onclick=\"document.getElementById('modal').remove()\">&times;</button></div></div>");
+
+        healer.locator("Form.save", "#save").click();
+
+        assertEquals("Saved", page.locator("#save").textContent());
+        assertEquals(null, page.evaluate("document.body.dataset.subscribed"), "Subscribe must never be clicked");
+        assertEquals(1, popups());
+    }
+
+    @Test
+    void layerWithoutCloseButtonIsClosedWithEscape() {
+        page.setContent(SAVE_FORM
+                + "<div id='modal' role='dialog' style='position:fixed;inset:0;background:rgba(0,0,0,.4)'>"
+                + "<button onclick=\"alert('x')\">Delete account</button></div>"
+                + "<script>document.addEventListener('keydown', e => { if (e.key === 'Escape') document.getElementById('modal').remove(); });</script>");
+
+        healer.locator("Form.save", "#save").click();
+
+        assertEquals("Saved", page.locator("#save").textContent());
+        assertEquals("Escape", lastEvent("Form.save").healedSelector);
+    }
+
+    @Test
+    void elementInsideTheModalIsNotAPopupCase() {
+        page.setContent("<div role='dialog' style='position:fixed;inset:0;background:#fff'>"
+                + "<button type='button' id='save' onclick=\"this.textContent='Saved'\">Save</button>"
+                + "<button onclick=\"this.parentElement.remove()\">Close</button></div>");
+
+        healer.locator("Dialog.save", "#save").click();
+
+        assertEquals("Saved", page.locator("#save").textContent());
+        assertEquals(0, popups());
+    }
+
     @Test
     void elementInsideShadowDomIsHealed() {
         page.setContent("<newsletter-box></newsletter-box><script>"

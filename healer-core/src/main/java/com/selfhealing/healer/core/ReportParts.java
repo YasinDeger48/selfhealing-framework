@@ -23,11 +23,13 @@ import java.util.stream.Stream;
  */
 public final class ReportParts {
 
-    public record Merged(List<HealingEvent> events, List<HealingRecorder.TestRecord> tests, Instant runStartedAt) {
+    public record Merged(List<HealingEvent> events, List<HealingRecorder.TestRecord> tests,
+                         List<LocatorQuality.Entry> quality, Instant runStartedAt) {
     }
 
     private static final TypeReference<List<HealingEvent>> EVENTS = new TypeReference<>() { };
     private static final TypeReference<List<HealingRecorder.TestRecord>> TESTS = new TypeReference<>() { };
+    private static final TypeReference<List<LocatorQuality.Entry>> QUALITY = new TypeReference<>() { };
     /** Event ids are unique per JVM only; each part gets its own id range in the merged report. */
     private static final int ID_RANGE = 1_000_000;
 
@@ -37,7 +39,8 @@ public final class ReportParts {
     /** Writes this JVM's part, then merges all parts of the run - under a lock shared by all JVMs. */
     @SuppressWarnings("unchecked")
     public static Merged writeAndMerge(Path reportDir, String runId, List<HealingEvent> events,
-                                       List<HealingRecorder.TestRecord> tests, Instant startedAt) {
+                                       List<HealingRecorder.TestRecord> tests, List<LocatorQuality.Entry> quality,
+                                       Instant startedAt) {
         Path parts = reportDir.resolve("parts");
         String prefix = safe(runId) + "-";
         try {
@@ -48,10 +51,12 @@ public final class ReportParts {
                 mine.put("runStartedAt", startedAt);
                 mine.put("events", events);
                 mine.put("tests", tests);
+                mine.put("quality", quality);
                 Json.MAPPER.writeValue(parts.resolve(prefix + ProcessHandle.current().pid() + ".json").toFile(), mine);
 
                 List<HealingEvent> allEvents = new ArrayList<>();
                 List<HealingRecorder.TestRecord> allTests = new ArrayList<>();
+                List<List<LocatorQuality.Entry>> allQuality = new ArrayList<>();
                 Instant start = startedAt;
                 List<Path> files;
                 try (Stream<Path> list = Files.list(parts)) {
@@ -68,13 +73,14 @@ public final class ReportParts {
                     ts.forEach(t -> t.steps.forEach(s -> { if (s.healId != null) s.healId += offset; }));
                     allEvents.addAll(ev);
                     allTests.addAll(ts);
+                    allQuality.add(Json.MAPPER.convertValue(part.getOrDefault("quality", List.of()), QUALITY));
                     Object st = part.get("runStartedAt");
                     if (st != null) {
                         Instant partStart = Instant.parse(st.toString());
                         if (partStart.isBefore(start)) start = partStart;
                     }
                 }
-                return new Merged(allEvents, allTests, start);
+                return new Merged(allEvents, allTests, LocatorQuality.merge(allQuality), start);
             }
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot merge report parts", e);
