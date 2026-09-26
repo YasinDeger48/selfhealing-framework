@@ -100,6 +100,14 @@ An element that was never seen working (a new test, or ids that change on every 
 The healer then derives one from the selector itself (`#passenger-surname-fe465c1e` → id ≈ "passenger-surname" plus a
 generated part), heals with it, and stores the healed element's real fingerprint for the next runs.
 
+### Popups and overlays
+
+Before a click, fill, check, select or press, the healer checks whether another layer covers the element (cookie banner,
+newsletter modal, promo overlay). If so, it closes the layer with its close / accept / "not now" button - recognised in
+all six languages and by icon-only close buttons - or with Escape, then continues. Buttons that delete, buy, pay,
+subscribe or submit are never clicked. Each closed layer is a WARN in the report (with a screenshot of the button) so the
+team can decide whether the test should handle it. Layers that do not cover the element are left alone.
+
 ### Protection against false positives
 
 A heal that points at the wrong element would hide a real bug, so the healer prefers failing the step:
@@ -148,6 +156,7 @@ At the end of the run, in `target/healer-report/`:
 | `healing-report.pdf` | The same report as PDF (printed with the installed Edge; the HTML also has a "Save as PDF" button) |
 | `healing-report.json` | Machine-readable data for CI |
 | `locator-fixes.patch` | Source-code fixes for the healed locators (unified diff) - see below |
+| `locator-improvements.patch` | More stable selectors for risky locators that still work (optional) |
 
 Claude's reasoning stays in the language of the run; everything else in the report follows the language menu.
 Every heal shows its cost: local and cached heals `$0.0000`, Claude heals with tokens and dollars.
@@ -164,6 +173,22 @@ sources: Java/Kotlin/Groovy/Scala string literals and locator files (`.propertie
   are listed as **manual** with the declaring file and line - they are never guessed.
 - The report has a **Code fixes** section, and each "needs review" row shows the file and line.
 
+### Locator quality
+
+Every selector used in the run is rated by how likely it is to break: absolute XPath, position (`nth-child`, `[3]`),
+generated parts (`#btn-a8f3c2`), only tags or only CSS classes, deep chains, visible text. For a risky selector that
+still works, the healer asks the live element for a more stable one (`[data-testid='checkout']`). The report has a
+**Locator quality** section, and `locator-improvements.patch` applies the suggestions - it is never applied automatically.
+
+### Failure analysis
+
+When a test fails, the healer captures the evidence while the page is still open - the error, the failed step, the URL,
+a screenshot, browser console errors and failed or erroring requests, and heals or popups earlier in the test - and sorts
+the failure into a likely cause: **element missing**, **covered element**, **unexpected behaviour** (assertion),
+**timeout**, **network / server**, **environment**, **test code**. This is local and free. With the Claude stage enabled,
+Claude adds a one-or-two sentence explanation and a next step per failed test (masked evidence, about $0.001 per test).
+Each failed test card in the report shows the analysis; the Failed KPI shows the causes.
+
 ## Configuration — `healer.properties` on the test classpath (or `-D<name>=<value>`)
 
 | Setting | Default | Meaning |
@@ -177,6 +202,12 @@ sources: Java/Kotlin/Groovy/Scala string literals and locator files (`.propertie
 | `healer.storeDir` | `.healer` | Fingerprints and healing cache |
 | `healer.reportDir` | `target/healer-report` | Report output |
 | `healer.failOnHeal` | `false` | `true`: a healed test fails (strict CI) |
+| `healer.popups` | `auto` | Close layers that cover an element before interacting with it; `off` disables |
+| `healer.lint` | `on` | Rate every selector and suggest stable ones (`locator-improvements.patch`); `off` disables |
+| `healer.triage` | `on` | Failure analysis for failed tests; `off` disables |
+| `healer.triage.llm` | = `healer.llm.enabled` | Claude explanation for each failed test |
+| `healer.triage.model` | = `healer.llm.model` | Model for the explanations |
+| `healer.triage.maxCalls` | `20` | Explanation budget per run |
 | `healer.fix` | `patch` | Code fixes: `patch` (write `locator-fixes.patch`), `apply` (change the source files), `off` |
 | `healer.fix.sourceDirs` | `src/test/java,src/main/java,…` | Where to look for selectors (also Kotlin/Groovy/Scala and `src/*/resources`) |
 | `healer.fix.extensions` | `java,kt,groovy,scala,properties,json,yaml,yml` | Files searched for selectors |

@@ -48,10 +48,17 @@ public final class ReportWriter {
         summary.put("popups", events.stream().filter(e -> "popup".equals(e.kind) && e.status == HealingEvent.Status.HEALED).count());
         summary.put("bySource", events.stream().filter(e -> e.source != null && !e.reused && e.kind == null)
                 .collect(Collectors.groupingBy(e -> e.source.name(), LinkedHashMap::new, Collectors.counting())));
-        summary.put("llmCalls", events.stream().filter(e -> e.llmModel != null && !e.reused).count());
         summary.put("llmInputTokens", events.stream().filter(e -> !e.reused).mapToLong(e -> e.llmInputTokens).sum());
         summary.put("llmOutputTokens", events.stream().filter(e -> !e.reused).mapToLong(e -> e.llmOutputTokens).sum());
-        summary.put("llmCostUsd", llmCost(events));
+        double triageCost = tests.stream().filter(t -> t.triage != null).mapToDouble(t -> t.triage.llmCostUsd).sum();
+        summary.put("llmCostUsd", llmCost(events) + triageCost);
+        summary.put("triageCostUsd", triageCost);
+        summary.put("llmCalls", events.stream().filter(e -> e.llmModel != null && !e.reused).count()
+                + tests.stream().filter(t -> t.triage != null && t.triage.llmModel != null).count());
+        Map<String, Long> causes = new LinkedHashMap<>();
+        tests.stream().filter(t -> t.triage != null && "FAILED".equals(t.status))
+                .forEach(t -> causes.merge(t.triage.category.name(), 1L, Long::sum));
+        summary.put("failureCauses", causes);
 
         Map<String, Object> settings = new LinkedHashMap<>();
         settings.put("language", Messages.language());
@@ -95,14 +102,9 @@ public final class ReportWriter {
             i18n.put("languages", Messages.languages());
             i18n.put("labels", Messages.reportLabels());
             copy.put("i18n", i18n);
-            for (Map<String, Object> e : (List<Map<String, Object>>) copy.getOrDefault("events", List.of())) {
-                Object shot = e.get("screenshot");
-                if (shot instanceof String path && !path.startsWith("data:")) {
-                    Path img = reportDir.resolve(path);
-                    if (Files.exists(img)) {
-                        e.put("screenshot", "data:image/jpeg;base64," + Base64.getEncoder().encodeToString(Files.readAllBytes(img)));
-                    }
-                }
+            for (Map<String, Object> e : (List<Map<String, Object>>) copy.getOrDefault("events", List.of())) inline(reportDir, e);
+            for (Map<String, Object> t : (List<Map<String, Object>>) copy.getOrDefault("tests", List.of())) {
+                if (t.get("triage") instanceof Map<?, ?> triage) inline(reportDir, (Map<String, Object>) triage);
             }
             String json = Json.MAPPER.writer().without(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT)
                     .writeValueAsString(copy).replace("</", "<\\/");
@@ -112,6 +114,17 @@ public final class ReportWriter {
             return file;
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot write HTML report", e);
+        }
+    }
+
+    /** Replaces a screenshot path with a data URI, so the HTML file stays self-contained. */
+    private static void inline(Path reportDir, Map<String, Object> holder) throws IOException {
+        Object shot = holder.get("screenshot");
+        if (shot instanceof String path && !path.startsWith("data:")) {
+            Path img = reportDir.resolve(path);
+            if (Files.exists(img)) {
+                holder.put("screenshot", "data:image/jpeg;base64," + Base64.getEncoder().encodeToString(Files.readAllBytes(img)));
+            }
         }
     }
 

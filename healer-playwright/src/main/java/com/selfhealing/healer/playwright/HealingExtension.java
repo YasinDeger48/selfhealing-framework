@@ -12,7 +12,10 @@ import com.selfhealing.healer.core.ReportWriter;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.TestExecutionExceptionHandler;
 import org.junit.jupiter.api.extension.TestWatcher;
+import com.selfhealing.healer.core.FailureExplainer;
+import com.selfhealing.healer.core.FailureTriage;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -25,7 +28,7 @@ import java.util.Optional;
  *
  * <pre>{@code @ExtendWith(HealingExtension.class)}</pre>
  */
-public class HealingExtension implements BeforeEachCallback, AfterEachCallback, TestWatcher {
+public class HealingExtension implements BeforeEachCallback, AfterEachCallback, TestWatcher, TestExecutionExceptionHandler {
 
     private static final ExtensionContext.Namespace NS = ExtensionContext.Namespace.create(HealingExtension.class);
 
@@ -63,6 +66,26 @@ public class HealingExtension implements BeforeEachCallback, AfterEachCallback, 
         }
     }
 
+    /** Runs while the page is still open: the failure is classified and the page captured before @AfterEach closes it. */
+    @Override
+    public void handleTestExecutionException(ExtensionContext context, Throwable error) throws Throwable {
+        analyse(testId(context), error, true);
+        throw error;
+    }
+
+    private static void analyse(String test, Throwable error, boolean pageOpen) {
+        try {
+            HealingRecorder.TestRecord record = HealingRecorder.test(test);
+            if (record == null || record.triage != null || "off".equalsIgnoreCase(SelfHealingPage.engine().config().get("healer.triage", "on"))) return;
+            String url = pageOpen ? SelfHealingPage.currentUrl() : null;
+            FailureTriage.Result result = FailureTriage.classify(error, record, HealingRecorder.eventsFor(test), url != null ? url : record.lastUrl);
+            if (pageOpen) result.screenshot = SelfHealingPage.failureScreenshot(test);
+            record.triage = result;
+        } catch (RuntimeException ignored) {
+            // the analysis must never hide the real failure
+        }
+    }
+
     @Override
     public void testSuccessful(ExtensionContext context) {
         HealingRecorder.finishTest(testId(context), "PASSED", null);
@@ -70,7 +93,10 @@ public class HealingExtension implements BeforeEachCallback, AfterEachCallback, 
 
     @Override
     public void testFailed(ExtensionContext context, Throwable cause) {
+        analyse(testId(context), cause, false);   // failures outside the test method (e.g. @BeforeEach)
         HealingRecorder.finishTest(testId(context), "FAILED", cause.getClass().getSimpleName() + ": " + cause.getMessage());
+        HealingRecorder.TestRecord record = HealingRecorder.test(testId(context));
+        if (record != null && record.triage != null) System.out.println(FailureTriage.consoleLine(testId(context), record.triage));
     }
 
     @Override
@@ -88,6 +114,32 @@ public class HealingExtension implements BeforeEachCallback, AfterEachCallback, 
 
     static String testId(ExtensionContext context) {
         return context.getRequiredTestClass().getSimpleName() + "." + context.getRequiredTestMethod().getName();
+    }
+
+    /** Claude's short explanation for each failed test of this JVM (healer.triage.llm, default = healer.llm.enabled). */
+    static void explainFailures(HealerConfig config, List<HealingEvent> events) {
+        List<HealingRecorder.TestRecord> failed = HealingRecorder.tests().stream()
+                .filter(t -> "FAILED".equals(t.status) && t.triage != null && t.triage.explanation == null).toList();
+        if (failed.isEmpty()) return;
+        FailureExplainer explainer = FailureExplainer.discover(config);
+        if (explainer == FailureExplainer.NONE) return;
+        for (HealingRecorder.TestRecord t : failed) {
+            try {
+                explainer.explain(t, t.triage, HealingRecorder.eventsFor(t.id)).ifPresent(x -> {
+                    t.triage.explanation = x.summary();
+                    t.triage.suggestion = x.suggestion();
+                    if (x.usage() != null) {
+                        t.triage.llmModel = x.usage().model();
+                        t.triage.llmInputTokens = x.usage().inputTokens();
+                        t.triage.llmOutputTokens = x.usage().outputTokens();
+                        t.triage.llmCostUsd = x.usage().costUsd();
+                    }
+                    System.out.println(FailureTriage.consoleLine(t.id, t.triage));
+                });
+            } catch (RuntimeException e) {
+                System.out.println("[healer] Failure explanation skipped for " + t.id + ": " + e.getMessage());
+            }
+        }
     }
 
     /** Source-code fixes for the healed locators: a patch to review, or applied directly (healer.fix=apply). */
@@ -160,6 +212,7 @@ public class HealingExtension implements BeforeEachCallback, AfterEachCallback, 
             List<HealingEvent> events = HealingRecorder.all();
             String runId = config.get("healer.runId", "");
             Map<String, Object> model;
+            explainFailures(config, events);
             List<HealingEvent> runEvents = events;
             List<LocatorQuality.Entry> quality = LocatorQuality.all();
             if (runId.isBlank()) {

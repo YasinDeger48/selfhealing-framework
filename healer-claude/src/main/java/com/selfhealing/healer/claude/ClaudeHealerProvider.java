@@ -22,11 +22,24 @@ public class ClaudeHealerProvider implements LocatorHealerProvider {
             System.out.println("[healer] healer.llm.enabled=true but ANTHROPIC_API_KEY is not set - Claude stage disabled");
             return LocatorHealer.NONE;
         }
-        AnthropicClient client = AnthropicOkHttpClient.builder()
-                .apiKey(key)
-                .timeout(Duration.ofSeconds(Long.parseLong(config.get("healer.llm.timeoutSeconds", "90"))))
-                .maxRetries(2)
-                .build();
-        return new ClaudeLocatorHealer(client, config);
+        return new ClaudeLocatorHealer(client(config, key), config);
+    }
+
+    /** One HTTP client per JVM, shared by the healing stage and the failure explanations. */
+    private static volatile AnthropicClient shared;
+
+    static AnthropicClient client(HealerConfig config, String key) {
+        if (shared == null) {
+            synchronized (ClaudeHealerProvider.class) {
+                if (shared == null) {
+                    shared = AnthropicOkHttpClient.builder()
+                            .apiKey(key)
+                            .timeout(Duration.ofSeconds(Long.parseLong(config.get("healer.llm.timeoutSeconds", "90"))))
+                            .maxRetries(2)
+                            .build();
+                }
+            }
+        }
+        return shared;
     }
 }

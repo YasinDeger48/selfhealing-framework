@@ -38,7 +38,16 @@ public final class HealingRecorder {
         public Instant startedAt = Instant.now();
         public long durationMs;
         public final List<Step> steps = new ArrayList<>();
+        /** Browser console errors and failed / erroring requests seen during the test (first 20 each). */
+        public final List<String> consoleErrors = Collections.synchronizedList(new ArrayList<>());
+        public final List<String> networkErrors = Collections.synchronizedList(new ArrayList<>());
+        /** Last page URL (main frame). */
+        public String lastUrl;
+        /** Failure analysis, for failed tests. */
+        public FailureTriage.Result triage;
     }
+
+    private static final int MAX_NOTES = 20;
 
     private static final List<HealingEvent> EVENTS = Collections.synchronizedList(new ArrayList<>());
     private static final Map<String, TestRecord> TESTS = Collections.synchronizedMap(new LinkedHashMap<>());
@@ -105,6 +114,25 @@ public final class HealingRecorder {
             }
         }
         return s;
+    }
+
+    public static TestRecord test(String testId) {
+        return TESTS.get(testId);
+    }
+
+    public static void consoleError(String text) {
+        TestRecord t = TESTS.get(currentTest());
+        if (t != null && t.consoleErrors.size() < MAX_NOTES) t.consoleErrors.add(text);
+    }
+
+    public static void networkError(String text) {
+        TestRecord t = TESTS.get(currentTest());
+        if (t != null && t.networkErrors.size() < MAX_NOTES) t.networkErrors.add(text);
+    }
+
+    public static void pageUrl(String url) {
+        TestRecord t = TESTS.get(currentTest());
+        if (t != null) t.lastUrl = url;
     }
 
     public static List<HealingEvent> eventsFor(String testId) {

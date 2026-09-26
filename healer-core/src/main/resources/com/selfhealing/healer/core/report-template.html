@@ -63,7 +63,14 @@
   .pill.popup { background: #fff0f6; color: #a61e4d; }
   .pill.risk-HIGH { background: #ffe3e3; color: #c92a2a; } .pill.risk-MEDIUM { background: #fff4e0; color: #9a5b00; }
   .pill.risk-LOW { background: #e7f5ff; color: #1864ab; } .pill.risk-OK { background: #e3f6e8; color: #1c7c3a; }
-  #qualityCommand { margin: 0 0 12px; } .reasons { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  #qualityCommand { margin: 0 0 12px; }
+  .triage { margin: 12px 0; border: 1px solid #ffc9c9; border-radius: 10px; background: #fff; overflow: hidden; }
+  .triage .th { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 12px; background: var(--red-bg); }
+  .triage .th b { color: var(--red); } .triage .tb { padding: 10px 12px; display: grid; gap: 8px; font-size: 13px; }
+  .triage .hint { color: var(--muted); } .triage .kv { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+  .triage ul { margin: 4px 0 0; padding-inline-start: 18px; font-family: var(--mono); font-size: 12px; }
+  .triage .shot img { max-width: 100%; border: 1px solid var(--border); border-radius: 8px; cursor: zoom-in; }
+  .pill.cat { background: #ffe3e3; color: #c92a2a; font-weight: 700; } .reasons { font-size: 12px; color: var(--muted); margin-top: 3px; }
 
   /* Pills */
   .pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap; }
@@ -351,7 +358,9 @@ function renderKpis() {
       `<div class="bar"><span style="width:${pct(pass)};background:var(--green)"></span><span style="width:${pct(warn)};background:var(--amber)"></span><span style="width:${pct(fail)};background:var(--red)"></span></div>`],
     [L("kpi.clean"), pass, L("kpi.cleanSub"), "green", ""],
     [L("kpi.warn"), warn, L("kpi.warnSub"), "amber", ""],
-    [L("kpi.failed"), fail, S.healFailed ? L("kpi.failedSub", S.healFailed) : L("kpi.failedNone"), "red", ""],
+    [L("kpi.failed"), fail, Object.keys(S.failureCauses || {}).length
+        ? Object.entries(S.failureCauses).map(([c, n]) => n + " " + L("cat." + c)).join(" · ")
+        : S.healFailed ? L("kpi.failedSub", S.healFailed) : L("kpi.failedNone"), "red", ""],
     [L("kpi.heals"), (src.HEURISTIC || 0) + (src.CACHE || 0) + (src.LLM || 0),
       L("kpi.healsSub", src.HEURISTIC || 0, src.CACHE || 0, src.LLM || 0), "", ""],
     [L("kpi.cost"), usd(S.llmCostUsd), L("kpi.costSub", S.llmCalls || 0, tokens), "purple", ""]
@@ -507,6 +516,30 @@ function renderHeal(e) {
   </details>`;
 }
 
+function signalText(sg) {
+  const [code, n] = sg.split(":");
+  return L("signal." + code, n);
+}
+
+function renderTriage(t) {
+  const r = t.triage;
+  if (!r || t.status !== "FAILED") return "";
+  const list = (title, items) => items && items.length
+    ? `<div><b>${title}</b><ul>${items.map(i => `<li dir="ltr">${esc(i)}</li>`).join("")}</ul></div>` : "";
+  const claude = r.explanation ? `<div class="reason"><b>${L("triage.claude")}</b> ${esc(r.explanation)}
+      ${r.suggestion ? `<div style="margin-top:6px"><b>${L("triage.next")}</b> ${esc(r.suggestion)}</div>` : ""}
+      <div class="reason-note">${esc(r.llmModel || "")} · ${usd(r.llmCostUsd || 0)}</div></div>` : "";
+  return `<div class="triage"><div class="th">&#129514; <b>${L("triage.title")}</b>
+      <span class="pill cat">${L("cat." + r.category)}</span>${(r.signals || []).map(sg => `<span class="pill warn">${esc(signalText(sg))}</span>`).join("")}</div>
+    <div class="tb"><div class="hint">${L("catHint." + r.category)}</div>
+      ${r.failedStep ? `<div><b>${L("triage.step")}</b> <span class="kv" dir="ltr">${esc(r.failedStep)}</span></div>` : ""}
+      ${r.pageUrl ? `<div><b>${L("triage.url")}</b> <span class="kv" dir="ltr">${esc(r.pageUrl)}</span></div>` : ""}
+      ${claude}
+      ${list(L("triage.console"), r.consoleErrors)}${list(L("triage.network"), r.networkErrors)}
+      ${r.screenshot ? `<div class="shot" data-src="${r.screenshot}"><img src="${r.screenshot}" alt=""><div class="cap">${L("triage.shot")}</div></div>` : ""}
+    </div></div>`;
+}
+
 function renderTests() {
   // keep the user's open/closed choices across re-renders (language switch, filter)
   const open = new Set([...document.querySelectorAll("#tests details[open]")].map(d => d.dataset.id));
@@ -532,7 +565,7 @@ function renderTests() {
       <summary>${statusPill(t)}<div class="tname"><span class="cls">${esc(t.className || "")} ›</span> ${esc(t.method || t.id)}</div>
         <span class="tmeta hide-sm">${L("stepsHeals", (t.steps || []).length, t.healed.length)}</span>
         <span class="tmeta">${dur(t.durationMs || 0)} · ${costPill(t.cost)}</span><span class="chev">&#9656;</span></summary>
-      <div class="tbody">${t.error ? `<div class="error">${esc(t.error)}</div>` : ""}<div class="steps">${steps || `<div class="empty">${L("noSteps")}</div>`}</div>${failedHeals}</div>
+      <div class="tbody">${t.error ? `<div class="error">${esc(t.error)}</div>` : ""}${renderTriage(t)}<div class="steps">${steps || `<div class="empty">${L("noSteps")}</div>`}</div>${failedHeals}</div>
     </details>`;
   }).join("") || `<div class="card empty">${L("noTests")}</div>`;
   document.querySelectorAll("#tests details").forEach(d => { if (open.has(d.dataset.id) || allOpen) d.open = true; });
