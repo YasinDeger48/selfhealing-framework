@@ -52,7 +52,9 @@ public final class HealerConfig {
     /** Any setting by name, for extension modules (e.g. {@code healer.llm.effort}). */
     public String get(String name, String defaultValue) {
         String v = raw.getProperty(name);
-        if ((v == null || v.isBlank()) && DERIVED_DEFAULTS.containsKey(name)) return DERIVED_DEFAULTS.get(name).get();
+        // Not set -> derived default; set to an empty value -> empty (e.g. healer.llm.escalateTo= turns escalation off).
+        if (v == null && DERIVED_DEFAULTS.containsKey(name)) return DERIVED_DEFAULTS.get(name).get();
+        if (v != null && v.isBlank() && DERIVED_DEFAULTS.containsKey(name)) return "";
         return v == null || v.isBlank() ? defaultValue : v.trim();
     }
 

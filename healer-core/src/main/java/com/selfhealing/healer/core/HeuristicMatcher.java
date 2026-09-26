@@ -53,10 +53,12 @@ public class HeuristicMatcher {
         Map<String, Double> signals = new LinkedHashMap<>();
         if (fp.getTag() != null) signals.put("tag", tagSimilarity(fp, c)); // a selector-derived fingerprint may lack it
 
+        Set<String> absent = new HashSet<>();
         for (String attr : ElementSnapshot.TRACKED_ATTRIBUTES) {
             String expected = fp.attr(attr);
             if (expected == null || !WEIGHTS.containsKey(attr)) continue;
             String actual = c.attr(attr);
+            if (actual == null) absent.add(attr);
             double sim;
             if (attr.equals("class")) {
                 sim = Similarity.jaccard(Set.of(expected.split("\\s+")), actual == null ? Set.of() : Set.of(actual.split("\\s+")));
@@ -81,7 +83,8 @@ public class HeuristicMatcher {
         double weighted = 0;
         double total = 0;
         for (Map.Entry<String, Double> e : signals.entrySet()) {
-            double w = WEIGHTS.get(e.getKey());
+            // An attribute the element no longer has at all is weaker evidence than one with a different value.
+            double w = WEIGHTS.get(e.getKey()) * (absent.contains(e.getKey()) ? ABSENT_FACTOR : 1);
             weighted += w * e.getValue();
             total += w;
         }
@@ -91,10 +94,58 @@ public class HeuristicMatcher {
             score *= INDEX_MISMATCH_FACTOR;
             signals.put("indexMismatch", 0.0);
         }
+        if (oppositeMeaning(fp, c)) {
+            // quantity-increase vs quantity-decrease: nearly the same name, the opposite action.
+            score *= INDEX_MISMATCH_FACTOR;
+            signals.put("opposite", 0.0);
+        }
         return new Scored(c, score, signals);
     }
 
     private static final double INDEX_MISMATCH_FACTOR = 0.5;
+    private static final double ABSENT_FACTOR = 0.5;
+
+    /** Word pairs with opposite meaning; a candidate named with the other word of a pair is a different control. */
+    private static final String[][] OPPOSITES = {
+            {"increase", "decrease"}, {"inc", "dec"}, {"increment", "decrement"}, {"plus", "minus"}, {"add", "remove"},
+            {"next", "prev"}, {"next", "previous"}, {"forward", "back"}, {"up", "down"}, {"open", "close"},
+            {"show", "hide"}, {"expand", "collapse"}, {"enable", "disable"}, {"on", "off"}, {"yes", "no"},
+            {"accept", "reject"}, {"accept", "decline"}, {"approve", "deny"}, {"login", "logout"}, {"signin", "signout"},
+            {"first", "last"}, {"min", "max"}, {"left", "right"}, {"start", "stop"}, {"play", "pause"},
+            {"subscribe", "unsubscribe"}, {"follow", "unfollow"}, {"lock", "unlock"}, {"import", "export"},
+            {"upload", "download"}, {"zoomin", "zoomout"}, {"undo", "redo"}, {"from", "to"}, {"in", "out"},
+            {"artir", "azalt"}, {"ileri", "geri"}, {"ac", "kapat"}, {"ekle", "cikar"}, {"goster", "gizle"}};
+
+    /**
+     * False when the candidate cannot be the element whatever its score: another list item (different item number),
+     * the opposite control, or a non-interactive element standing in for a button, link or field.
+     */
+    public static boolean compatible(ElementSnapshot fp, ElementSnapshot c) {
+        if (indexMismatch(fp, c) || oppositeMeaning(fp, c)) return false;
+        String expected = family(fp);
+        return expected == null || expected.equals(family(c));
+    }
+
+    /** True when one element is named with a word and the other with its opposite (in identifiers, labels or text). */
+    static boolean oppositeMeaning(ElementSnapshot fp, ElementSnapshot c) {
+        Set<String> a = words(fp);
+        Set<String> b = words(c);
+        for (String[] pair : OPPOSITES) {
+            if ((a.contains(pair[0]) && !a.contains(pair[1]) && b.contains(pair[1]) && !b.contains(pair[0]))
+                    || (a.contains(pair[1]) && !a.contains(pair[0]) && b.contains(pair[0]) && !b.contains(pair[1]))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static Set<String> words(ElementSnapshot e) {
+        Set<String> out = new HashSet<>();
+        for (String attr : List.of("id", "data-testid", "data-qa", "name", "aria-label", "title")) out.addAll(Similarity.tokens(e.attr(attr)));
+        out.addAll(Similarity.tokens(e.getText()));
+        out.addAll(Similarity.tokens(e.getLabelText()));
+        return out;
+    }
     // An item number is a short, all-digit token after - or _ (add-to-cart-8, row_12). Random ids such as
     // "-fe465c10" or long generated numbers are not item numbers and must not trigger the penalty.
     private static final Pattern TRAILING_NUMBER = Pattern.compile("[-_](\\d{1,4})$");
@@ -139,6 +190,7 @@ public class HeuristicMatcher {
     /** Elements that can stand in for each other, e.g. a button re-tagged as a link. */
     private static String family(ElementSnapshot e) {
         String tag = e.getTag();
+        if (tag == null) return null;   // a fingerprint derived from a selector may not know the tag
         String kind = "input".equals(tag) ? "input:" + e.attr("type") : tag;
         if (CLICKABLE.contains(kind) || "button".equals(e.attr("role"))) return "clickable";
         if ("input".equals(tag) || "textarea".equals(tag) || "select".equals(tag)) return "field";

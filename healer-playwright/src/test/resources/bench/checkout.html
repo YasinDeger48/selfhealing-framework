@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Checkout</title>
+<style>body{font-family:sans-serif;margin:0}main{max-width:520px;margin:24px auto}label{display:block;margin-top:10px}
+input,select,textarea{width:100%;padding:6px}.row{display:flex;gap:12px}.actions{margin-top:16px;display:flex;gap:12px}</style>
+</head>
+<body>
+<main>
+  <h1>Checkout</h1>
+  <form id="checkout-form" onsubmit="return false">
+    <label for="full-name">Full name</label>
+    <input id="full-name" name="fullName" data-testid="full-name-input" placeholder="Jane Doe">
+    <label for="street">Street address</label>
+    <input id="street" name="street" data-testid="street-input" placeholder="Street and number">
+    <div class="row">
+      <div><label for="city">City</label><input id="city" name="city" data-testid="city-input"></div>
+      <div><label for="zip">Postal code</label><input id="zip" name="zip" data-testid="zip-input"></div>
+    </div>
+    <label for="country">Country</label>
+    <select id="country" name="country" data-testid="country-select"><option>Germany</option><option>Turkey</option><option>Japan</option></select>
+    <label for="coupon-code">Coupon</label>
+    <div class="row">
+      <input id="coupon-code" name="coupon" data-testid="coupon-input" placeholder="Coupon code">
+      <button type="button" id="apply-coupon" data-testid="apply-coupon-button">Apply</button>
+    </div>
+    <label><input type="radio" name="shipping" id="ship-standard" data-testid="shipping-standard" checked> Standard shipping</label>
+    <label><input type="radio" name="shipping" id="ship-express" data-testid="shipping-express"> Express shipping</label>
+    <label for="notes">Delivery notes</label>
+    <textarea id="notes" name="notes" data-testid="notes-textarea" placeholder="Anything we should know?"></textarea>
+    <label><input type="checkbox" id="accept-terms" name="terms" data-testid="terms-checkbox"> I accept the terms</label>
+    <div class="actions">
+      <button type="button" id="back-to-cart" data-testid="back-button" class="btn">Back</button>
+      <button type="submit" id="place-order" data-testid="place-order-button" class="btn btn-primary">Place order</button>
+    </div>
+  </form>
+</main>
+</body>
+</html>

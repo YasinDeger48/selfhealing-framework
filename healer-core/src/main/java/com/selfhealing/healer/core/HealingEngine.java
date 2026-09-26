@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -109,10 +110,19 @@ public class HealingEngine {
         List<ElementSnapshot> candidates = page.collectCandidates();
         List<HeuristicMatcher.Scored> ranked = fp == null ? List.of() : matcher.rank(fp.getElement(), candidates);
 
+        // Candidates the guards rule out whatever their score - another list item, the opposite control, a field for a
+        // button - are neither accepted locally nor offered to the LLM (safer, and no LLM call if nothing is left).
+        ElementSnapshot target = fp == null ? null : fp.getElement();
+        // Nor is an element that another locator knows as its own (tab-specs when tab-reviews was removed).
+        Set<String> others = otherKnownElements(key, target);
+        List<HeuristicMatcher.Scored> plausible = target == null ? ranked
+                : ranked.stream().filter(s -> HeuristicMatcher.compatible(target, s.candidate()))
+                        .filter(s -> !isKnownElsewhere(s.candidate(), others)).toList();
+
         // 2. Local heuristic
-        if (fp != null && !ranked.isEmpty()) {
-            HeuristicMatcher.Scored best = ranked.get(0);
-            double second = ranked.size() > 1 ? ranked.get(1).score() : 0;
+        if (fp != null && !plausible.isEmpty()) {
+            HeuristicMatcher.Scored best = plausible.get(0);
+            double second = plausible.size() > 1 ? plausible.get(1).score() : 0;
             double margin = best.score() - second;
             boolean accepted = best.score() >= config.minConfidence() && margin >= config.minMargin()
                     && best.candidate().getSelector() != null;
@@ -131,10 +141,10 @@ public class HealingEngine {
 
         // 3. LLM healer - only the best local matches are sent, to keep the prompt small
         HealingSuggestion.LlmUsage llmUsage = null;
-        if (config.llmEnabled() && llm != LocatorHealer.NONE) {
+        if (config.llmEnabled() && llm != LocatorHealer.NONE && (target == null || !plausible.isEmpty())) {
             List<HeuristicMatcher.Scored> top = ranked.isEmpty()
                     ? candidates.stream().map(c -> new HeuristicMatcher.Scored(c, 0, Map.of())).limit(config.llmCandidates()).toList()
-                    : ranked.subList(0, Math.min(config.llmCandidates(), ranked.size()));
+                    : plausible.subList(0, Math.min(config.llmCandidates(), plausible.size()));
             listener.llmRequested(key, config.llmModel(), top.size());
             long t0 = System.currentTimeMillis();
             LocatorHealer.Answer answer = llm.suggest(new LocatorHealer.Request(key, originalSelector, fp, top, page.url()));
@@ -144,8 +154,8 @@ public class HealingEngine {
             if (s.isPresent() && s.get().confidence() >= config.minConfidence()) {
                 int matches = page.count(s.get().selector());
                 listener.validated(key, s.get().selector(), matches);
-                if (matches == 1) {
-                    ElementSnapshot element = page.snapshot(s.get().selector());
+                ElementSnapshot element = matches == 1 ? page.snapshot(s.get().selector()) : null;
+                if (matches == 1 && (target == null || element == null || HeuristicMatcher.compatible(target, element))) {
                     HealingSuggestion validated = new HealingSuggestion(s.get().selector(), HealingSuggestion.Source.LLM,
                             s.get().confidence(), s.get().reasoning(), element, diff(fp, element), s.get().usage());
                     if (coldStart && element != null) learn(key, originalSelector, page.url(), element, listener);
@@ -167,6 +177,38 @@ public class HealingEngine {
                     config.llmEnabled() ? "; LLM healer did not return a valid match" : "; LLM healer disabled");
         }
         return new Result(null, reason, ranked, llmUsage);
+    }
+
+    /**
+     * data-testid and id values of the elements other locators were recorded with - except locators recorded on the
+     * same element as this one (two page objects may point at one element in different ways).
+     */
+    private Set<String> otherKnownElements(String key, ElementSnapshot target) {
+        Set<String> mine = new java.util.HashSet<>();
+        if (target != null) {
+            for (String attr : List.of("data-testid", "id")) {
+                String v = target.attr(attr);
+                if (v != null && !v.isBlank()) mine.add(attr + "=" + v);
+            }
+        }
+        Set<String> out = new java.util.HashSet<>();
+        fingerprints.all().forEach((k, f) -> {
+            if (k.equals(key) || f.getElement() == null) return;
+            if (List.of("data-testid", "id").stream().anyMatch(a -> mine.contains(a + "=" + f.getElement().attr(a)))) return;
+            for (String attr : List.of("data-testid", "id")) {
+                String v = f.getElement().attr(attr);
+                if (v != null && !v.isBlank()) out.add(attr + "=" + v);
+            }
+        });
+        return out;
+    }
+
+    private static boolean isKnownElsewhere(ElementSnapshot c, Set<String> others) {
+        for (String attr : List.of("data-testid", "id")) {
+            String v = c.attr(attr);
+            if (v != null && !v.isBlank() && others.contains(attr + "=" + v)) return true;
+        }
+        return false;
     }
 
     /** Stores the healed element as the fingerprint of an element that never had a recorded one. */

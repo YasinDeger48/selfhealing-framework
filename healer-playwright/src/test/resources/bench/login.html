@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Sign in</title>
+<style>body{font-family:sans-serif;margin:0}header{display:flex;gap:16px;padding:12px 24px;background:#223}header a{color:#fff}
+main{max-width:360px;margin:40px auto}label{display:block;margin-top:12px}input{width:100%;padding:8px}button{margin-top:16px;padding:8px 16px}</style>
+</head>
+<body>
+<header>
+  <a href="#home" id="nav-home" data-testid="nav-home-link">Home</a>
+  <a href="#pricing" id="nav-pricing" data-testid="nav-pricing-link">Pricing</a>
+  <a href="#help" id="nav-help" data-testid="nav-help-link">Help</a>
+</header>
+<main>
+  <h1>Sign in</h1>
+  <form id="login-form" class="auth-form" onsubmit="return false">
+    <label for="login-email">Email</label>
+    <input id="login-email" name="email" type="email" placeholder="you@example.com" data-testid="login-email-input" class="form-control">
+    <label for="login-password">Password</label>
+    <input id="login-password" name="password" type="password" placeholder="Password" data-testid="login-password-input" class="form-control">
+    <label><input id="remember-me" name="remember" type="checkbox" data-testid="remember-checkbox"> Remember me</label>
+    <button id="login-submit" type="submit" class="btn btn-primary" data-testid="login-submit-button">Sign in</button>
+    <a href="#forgot" id="forgot-password" data-testid="forgot-password-link">Forgot password?</a>
+  </form>
+  <p><a href="#register" id="register-link" data-testid="register-link">Create an account</a></p>
+</main>
+</body>
+</html>

@@ -72,7 +72,23 @@ public final class Similarity {
         String sa = withoutGenerated(a);
         String sb = withoutGenerated(b);
         if (!sa.isEmpty() && sa.equals(sb) && !sa.equals(normalize(a))) sim = Math.max(sim, GENERATED_MATCH);
+        // street-input vs street-field, country-select vs country-dropdown: only the control-type word changed.
+        String ra = withoutRoleWords(sa.isEmpty() ? normalize(a) : sa);
+        String rb = withoutRoleWords(sb.isEmpty() ? normalize(b) : sb);
+        if (!ra.isEmpty() && ra.equals(rb)) sim = Math.max(sim, ROLE_WORD_MATCH);
         return sim;
+    }
+
+    private static final double ROLE_WORD_MATCH = 0.9;
+    /** Words that name the kind of control rather than its purpose; renamed freely (input -> field, select -> dropdown). */
+    private static final java.util.Set<String> ROLE_WORDS = java.util.Set.of("input", "field", "fld", "box", "textbox", "txt",
+            "button", "btn", "select", "dropdown", "combo", "combobox", "picker", "link", "lnk", "anchor", "checkbox", "chk",
+            "check", "radio", "toggle", "switch", "textarea", "control", "ctrl", "widget");
+
+    static String withoutRoleWords(String s) {
+        return Arrays.stream(normalize(s).split("[^a-z0-9]+"))
+                .filter(t -> !t.isEmpty() && !ROLE_WORDS.contains(t))
+                .collect(Collectors.joining(" "));
     }
 
     private static final double GENERATED_MATCH = 0.95;

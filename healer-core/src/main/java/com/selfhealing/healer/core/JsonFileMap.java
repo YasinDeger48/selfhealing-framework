@@ -57,6 +57,11 @@ public class JsonFileMap<V> {
         if (entries.containsKey(key) || Files.exists(file)) update(m -> m.remove(key));
     }
 
+    /** A snapshot of all entries. */
+    public synchronized Map<String, V> all() {
+        return new java.util.LinkedHashMap<>(entries);
+    }
+
     public synchronized int size() {
         return entries.size();
     }

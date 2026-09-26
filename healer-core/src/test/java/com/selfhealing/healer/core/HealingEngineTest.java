@@ -93,4 +93,27 @@ class HealingEngineTest {
         strict.remember("Login.username", "#login-username", "/login", username("login-username", "login-username-input"));
         assertFalse(strict.heal("Login.username", "#login-username", page).healed(), "unvalidated selector must be rejected");
     }
+
+    @Test
+    void neverHealsOntoAnElementAnotherLocatorOwns(@TempDir Path dir) {
+        HealingEngine engine = engine(dir, false, null);
+        ElementSnapshot reviews = HeuristicMatcherTest.el("button", "Reviews", List.of("div.product-tabs"),
+                "id", "tab-reviews", "data-testid", "tab-reviews", "class", "tab");
+        ElementSnapshot specs = HeuristicMatcherTest.el("button", "Specifications", List.of("div.product-tabs"),
+                "id", "tab-specs", "data-testid", "tab-specs", "class", "tab");
+        engine.remember("Product.reviewsTab", "#tab-reviews", "/p", reviews);
+        engine.remember("Product.specsTab", "#tab-specs", "/p", specs);
+        // the same element as reviews, under a second key: must not block healing reviews
+        engine.remember("Product.reviewsByText", "button:has-text('Reviews')", "/p", reviews);
+
+        FakePage page = new FakePage();
+        page.elements.add(specs);   // the reviews tab was removed
+        assertFalse(engine.heal("Product.reviewsTab", "#tab-reviews", page).healed(), "specs belongs to another locator");
+
+        FakePage renamed = new FakePage();
+        renamed.elements.add(specs);
+        renamed.elements.add(HeuristicMatcherTest.el("button", "Reviews", List.of("div.product-tabs"),
+                "id", "tab-reviews-v2", "data-testid", "tab-reviews-v2", "class", "tab"));
+        assertEquals("#tab-reviews-v2", engine.heal("Product.reviewsTab", "#tab-reviews", renamed).suggestion().selector());
+    }
 }

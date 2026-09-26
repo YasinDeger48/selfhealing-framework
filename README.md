@@ -1,5 +1,7 @@
 # Self-Healing Locator Framework
 
+[![CI](https://github.com/YasinDeger48/selfhealing-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/YasinDeger48/selfhealing-framework/actions/workflows/ci.yml)
+
 A Java library for **Playwright + JUnit 5** test suites. When a locator stops matching because the
 application's markup changed, it finds the element again, keeps the test running and reports every
 repair as a **WARN** with the suggested page-object fix. Works with any web application and any test
@@ -116,7 +118,13 @@ A heal that points at the wrong element would hide a real bug, so the healer pre
 - **Different item number = different record.** `add-to-cart-8` vs `add-to-cart-5`, or a parent
   `product-card-8` vs `product-card-5`, halves the score: a look-alike from another list item never wins,
   even when it is the only similar element left. Renames that keep the number (`add-to-cart-8` → `btn-add-8`) are not affected.
-- Claude answers -1 when nothing on the page clearly is the element; every pick is validated on the page.
+- **Opposite controls never replace each other:** `quantity-increase` vs `quantity-decrease`, next/previous,
+  open/close, accept/reject, login/logout ... halve the score and are never offered to Claude.
+- **Type must fit:** a field never replaces a button (or the other way round); a container never replaces either.
+- **Another locator's element is not a replacement:** if `tab-reviews` is removed, `tab-specs` - known to another
+  locator - is never chosen.
+- Claude answers -1 when nothing on the page clearly is the element; every pick is validated on the page and must pass
+  the same guards.
 - Measured on the demo (removed-elements scenario): 4 of 4 deleted elements correctly reported as NOT HEALED.
   Best wrong candidates scored 0.28–0.43, correct heuristic heals 0.69–0.97, so the 0.60 threshold sits in the gap.
 
@@ -145,6 +153,47 @@ Before anything is sent to Claude, page content is masked: e-mail addresses, pho
   heuristic keeps working.
 - Measured cost per Claude heal (~1.7–2.4K input / ~100 output tokens): Haiku 4.5 ≈ $0.002,
   Sonnet 5 ≈ $0.006, Opus 5 ≈ $0.014. Successful heals are cached, so a repeated break costs nothing.
+
+## Measured accuracy
+
+`HealingBenchmark` fingerprints the interactive elements of a page, simulates a release in the browser and heals every
+broken selector. Each element carries a hidden marker the matcher never sees, so every heal is checked: correct element,
+**wrong element** (a false positive - the dangerous case) or not healed. Levels are cumulative:
+
+| Level | What changes |
+|---|---|
+| low | ids, test ids and classes renamed |
+| medium | + name, placeholder and text changed, element wrapped in a new container |
+| high | + one identifier removed, buttons re-tagged as links, elements moved |
+| extreme | + all identifiers (id, data-testid, name) and classes removed |
+| removed | 40% of the elements deleted - the correct answer is "not healable" |
+
+ShopLab demo (4 pages, 86 elements, seed 42):
+
+| Level | Local heuristic only ($0) | + Claude Haiku |
+|---|---:|---:|
+| low | 100% | 100% |
+| medium | 97.7% | 100% |
+| high | 87.2% | 98.8% |
+| extreme | 22.1% | 97.7% |
+| removed (must not heal) | 100% | 100% |
+| **Wrong element picked** | **0** | **0** |
+
+Claude cost for all 373 broken elements: $0.13. Candidates ruled out by the guards (another list item, the opposite
+control, a field for a button, an element another locator owns) are never sent to Claude.
+
+Run it on your own application:
+
+```bash
+java -cp <test classpath> com.selfhealing.healer.playwright.HealingBenchmark \
+     --url https://app.example.com/login --url https://app.example.com/cart \
+     --storage-state logged-in.json   # optional: Playwright storage state for pages behind a login
+     [--llm true] [--levels low,medium,high,extreme,removed] [--seed 42] [--max 30] [--set healer.llm.escalateTo=]
+```
+
+Results go to `target/healer-benchmark/benchmark.md` and `benchmark.json` (per element: outcome and reason).
+CI runs the benchmark on three bundled pages on every push and fails on any wrong heal or on accuracy below the
+thresholds in `HealingBenchmarkTest`.
 
 ## Report
 

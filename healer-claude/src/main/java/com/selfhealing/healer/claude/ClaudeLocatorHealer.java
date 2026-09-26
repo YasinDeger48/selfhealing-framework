@@ -43,6 +43,8 @@ public class ClaudeLocatorHealer implements LocatorHealer {
             Element keys: tag, a = attributes, t = text, l = label, p = parent elements, xy = position.
             Match by purpose, not spelling: ids, text and even the tag may have changed; synonyms and translations count \
             (Şifre = Parola, Siparişi Tamamla = Satın Al). Use type, label, parents and position.
+            Pick only the same control: never a different control that merely leads to the same place (a product-name \
+            link for a removed "Details" button), a container of the element, or the same control of another list item.
             If look-alikes (e.g. identical list buttons) cannot be told apart, or nothing clearly matches, answer -1: \
             a wrong pick hides real bugs, -1 only fails the test.
             confidence: 0.9+ strong, 0.7-0.9 likely, below 0.6 answer -1. reasoning: one short sentence naming what changed.

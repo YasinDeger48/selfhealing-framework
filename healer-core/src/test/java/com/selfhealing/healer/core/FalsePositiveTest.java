@@ -55,4 +55,18 @@ class FalsePositiveTest {
         assertTrue(HeuristicMatcher.indexMismatch(fp, other));
         assertFalse(HeuristicMatcher.indexMismatch(fp, fp));
     }
+
+    @Test
+    void theOppositeControlIsNeverTheReplacement() {
+        ElementSnapshot increase = HeuristicMatcherTest.el("button", "+", List.of("div.quantity"),
+                "data-testid", "quantity-increase-button", "aria-label", "Increase quantity", "type", "button");
+        ElementSnapshot decrease = HeuristicMatcherTest.el("button", "-", List.of("div.quantity"),
+                "data-testid", "quantity-decrease-button", "aria-label", "Decrease quantity", "type", "button");
+        assertTrue(HeuristicMatcher.oppositeMeaning(increase, decrease));
+        assertTrue(new HeuristicMatcher().score(increase, decrease).score() < 0.6,
+                "the increase button was removed: decrease must not replace it");
+        ElementSnapshot renamed = HeuristicMatcherTest.el("button", "+", List.of("div.quantity"),
+                "data-testid", "qty-increase", "aria-label", "Increase quantity", "type", "button");
+        assertFalse(HeuristicMatcher.oppositeMeaning(increase, renamed));
+    }
 }

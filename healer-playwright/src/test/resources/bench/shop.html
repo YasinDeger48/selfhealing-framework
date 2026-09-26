@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Shop</title>
+<style>body{font-family:sans-serif;margin:0}.bar{display:flex;gap:12px;padding:12px 24px;background:#eef}
+.grid{display:grid;grid-template-columns:repeat(3,220px);gap:16px;padding:24px}.card{border:1px solid #ccc;padding:12px}
+.qty{display:flex;gap:6px;align-items:center;padding:0 24px}</style>
+</head>
+<body>
+<div class="bar">
+  <input id="product-search" name="q" type="search" placeholder="Search products" data-testid="search-input" aria-label="Search">
+  <select id="category-filter" name="category" data-testid="category-select" aria-label="Category">
+    <option>All</option><option>Books</option><option>Games</option>
+  </select>
+  <select id="sort-order" name="sort" data-testid="sort-select" aria-label="Sort by">
+    <option>Popular</option><option>Price</option>
+  </select>
+  <a href="#cart" id="cart-link" data-testid="cart-link">Cart <span id="cart-count" data-testid="cart-count">0</span></a>
+</div>
+<div class="grid">
+  <article class="card" id="product-card-1" data-testid="product-card-1"><h3>Atlas</h3>
+    <a href="#p1" id="view-product-1" data-testid="view-product-1">Details</a>
+    <button id="add-to-cart-1" data-testid="add-to-cart-1" class="btn add">Add to cart</button></article>
+  <article class="card" id="product-card-2" data-testid="product-card-2"><h3>Board game</h3>
+    <a href="#p2" id="view-product-2" data-testid="view-product-2">Details</a>
+    <button id="add-to-cart-2" data-testid="add-to-cart-2" class="btn add">Add to cart</button></article>
+  <article class="card" id="product-card-3" data-testid="product-card-3"><h3>Chess set</h3>
+    <a href="#p3" id="view-product-3" data-testid="view-product-3">Details</a>
+    <button id="add-to-cart-3" data-testid="add-to-cart-3" class="btn add">Add to cart</button></article>
+</div>
+<div class="qty">
+  <button id="quantity-decrease" data-testid="quantity-decrease-button" aria-label="Decrease quantity">-</button>
+  <input id="quantity" name="quantity" type="number" value="1" data-testid="quantity-input" aria-label="Quantity">
+  <button id="quantity-increase" data-testid="quantity-increase-button" aria-label="Increase quantity">+</button>
+  <button id="checkout" data-testid="checkout-button" class="btn btn-primary">Checkout</button>
+</div>
+</body>
+</html>
