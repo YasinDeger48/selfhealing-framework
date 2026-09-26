@@ -40,4 +40,6 @@ jobs:
       # The Maven errors as annotations, readable on the run page without downloading logs.
       - name: Annotate errors
         if: failure()
-        run: grep -E "\[ERROR\]|gpg:" release.log | grep -v "^\[ERROR\] *$" | head -15 | sed 's/^/::error::/' || true
+        run: |
+          grep -iE "pkg:maven|invalid|missing|namespace|signature|public key|deployment|failed" release.log \
+            | grep -v "^\[ERROR\] *$" | head -40 | cut -c1-900 | sed 's/^/::error::/' || true
