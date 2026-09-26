@@ -81,7 +81,7 @@ class PageVisualizer implements HealingListener {
                     .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
                     .limit(6)
                     .forEach(e -> sb.append(esc(e.getKey())).append(' ').append(fmt(e.getValue())).append(" &middot; "));
-            log("<span style='color:#9ca3af'>" + sb + "</span>", null);
+            log("<span style='color:#cbd5e1'>" + sb + "</span>", null);
             log(get(accepted ? "vis.accepted" : "vis.askClaude"),
                     accepted ? GREEN : ORANGE);
         }

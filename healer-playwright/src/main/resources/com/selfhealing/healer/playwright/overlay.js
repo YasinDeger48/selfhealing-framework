@@ -5,18 +5,29 @@
     p = document.createElement("div");
     p.id = "__healer_panel";
     p.setAttribute("data-healer-ui", "");
+    // Frosted glass: the page stays visible (blurred) behind the panel; a text shadow keeps the lines readable.
     p.style.cssText = "position:fixed;right:16px;bottom:16px;width:460px;max-height:60vh;overflow:auto;" +
-      "background:rgba(17,24,39,.94);color:#e5e7eb;font:13px/1.45 Consolas,monospace;border-radius:10px;" +
-      "box-shadow:0 8px 30px rgba(0,0,0,.35);z-index:2147483647;pointer-events:none;padding:12px 14px";
-    p.innerHTML = '<div style="font-weight:700;color:#fff;margin-bottom:6px">Self-Healing</div>';
+      "background:linear-gradient(135deg,rgba(15,23,42,.62),rgba(30,41,59,.48));" +
+      "-webkit-backdrop-filter:blur(12px) saturate(150%);backdrop-filter:blur(12px) saturate(150%);" +
+      "border:1px solid rgba(255,255,255,.14);color:#f1f5f9;font:13px/1.45 Consolas,monospace;" +
+      "text-shadow:0 1px 2px rgba(0,0,0,.55);border-radius:14px;" +
+      "box-shadow:0 10px 32px rgba(15,23,42,.28),inset 0 1px 0 rgba(255,255,255,.08);" +
+      "z-index:2147483647;pointer-events:none;padding:12px 14px;scrollbar-width:thin";
+    p.innerHTML = '<div style="display:flex;align-items:center;gap:8px;font-weight:700;color:#fff;margin-bottom:8px;' +
+      'padding-bottom:7px;border-bottom:1px solid rgba(255,255,255,.12);letter-spacing:.3px">' +
+      '<span style="width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,#34d399,#60a5fa);' +
+      'box-shadow:0 0 8px #34d399"></span>Self-Healing</div>';
     document.body.appendChild(p);
     return p;
   },
 
+  /** Box colors are strong for the page; on the translucent panel the text uses lighter tones of them. */
+  TEXT_TONES: { "#f08c00": "#ffc078", "#2f9e44": "#8ce99a", "#e03131": "#ffa8a8", "#7048e8": "#c0aefc" },
+
   log(html, color) {
     const p = this.panel();
     const line = document.createElement("div");
-    line.style.cssText = "margin:3px 0;color:" + (color || "#e5e7eb");
+    line.style.cssText = "margin:3px 0;color:" + (this.TEXT_TONES[color] || color || "#f1f5f9");
     line.innerHTML = html;
     p.appendChild(line);
     p.scrollTop = p.scrollHeight;
