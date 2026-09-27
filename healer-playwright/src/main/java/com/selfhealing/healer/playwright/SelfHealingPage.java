@@ -55,7 +55,7 @@ public class SelfHealingPage {
         this.adapter = new PlaywrightPageAdapter(page, frameSelector);
         HealerConfig config = engine().config();
         this.verbose = Boolean.parseBoolean(config.get("healer.verbose", "true"));
-        this.screenshots = Boolean.parseBoolean(config.get("healer.screenshots", "true"));
+        this.screenshots = config.screenshots() == HealerConfig.Screenshots.ALL;   // heal screenshots
         this.visualizer = Boolean.parseBoolean(config.get("healer.visual", "false"))
                 ? new PageVisualizer(adapter, Long.parseLong(config.get("healer.visual.pauseMs", "1200")))
                 : null;
@@ -245,9 +245,12 @@ public class SelfHealingPage {
         long started = System.currentTimeMillis();
         HealingEngine eng = engine();
         HealerConfig config = eng.config();
-        if (selector.startsWith(HealingEngine.INTENT)) return resolveIntent(key, selector, eng, config);
+        if (selector.startsWith(HealingEngine.INTENT)) {
+            if (!config.enabled()) throw new IllegalStateException("healer.find(\"" + key + "\", ...) needs the healer, but healer.enabled=false");
+            return resolveIntent(key, selector, eng, config);
+        }
         Locator original = adapter.locator(selector);
-        if (config.mode() == HealerConfig.Mode.OFF) return original;
+        if (config.mode() == HealerConfig.Mode.OFF || !config.enabled()) return original;
         LocatorQuality.Entry quality = observeQuality(key, selector, config);
 
         // Known replacements: a heal from earlier in this run, and one cached by an earlier run.
@@ -362,7 +365,7 @@ public class SelfHealingPage {
      */
     void clearObstruction(String key, String selector, Locator target) {
         HealerConfig config = engine().config();
-        if (config.mode() == HealerConfig.Mode.OFF || "off".equalsIgnoreCase(config.get("healer.popups", "auto"))) return;
+        if (config.mode() == HealerConfig.Mode.OFF || !config.enabled() || "off".equalsIgnoreCase(config.get("healer.popups", "auto"))) return;
         for (int attempt = 0; attempt < 3; attempt++) {
             PopupGuard.Obstruction o = PopupGuard.inspect(target);
             if (o == null) return;

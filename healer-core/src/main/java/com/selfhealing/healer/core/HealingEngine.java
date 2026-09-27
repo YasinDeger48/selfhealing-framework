@@ -53,6 +53,7 @@ public class HealingEngine {
         this.cache = new JsonFileMap<>(config.storeDir().resolve("healed-locators.json"), CachedHeal.class);
         this.matcher = new HeuristicMatcher();
         this.llm = llm == null ? LocatorHealer.NONE : llm;
+        LlmPricing.configure(config);
     }
 
     public HealerConfig config() {

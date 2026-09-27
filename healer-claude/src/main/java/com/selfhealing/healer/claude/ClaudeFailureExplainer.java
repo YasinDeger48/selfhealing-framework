@@ -76,7 +76,7 @@ public class ClaudeFailureExplainer implements FailureExplainer {
 
     @Override
     public Optional<Explanation> explain(HealingRecorder.TestRecord test, FailureTriage.Result triage, List<HealingEvent> events) {
-        if (calls.incrementAndGet() > maxCalls) return Optional.empty();
+        if (calls.incrementAndGet() > maxCalls || !LlmPricing.withinBudget()) return Optional.empty();
         String prompt = buildPrompt(test, triage, events, privacy.session());
         MessageCreateParams params = MessageCreateParams.builder()
                 .model(model)
@@ -99,6 +99,7 @@ public class ClaudeFailureExplainer implements FailureExplainer {
                 + response.usage().cacheCreationInputTokens().orElse(0L);
         long out = response.usage().outputTokens();
         HealingSuggestion.LlmUsage usage = new HealingSuggestion.LlmUsage(model, in, out, Math.max(0, LlmPricing.cost(model, in, out)));
+        LlmPricing.spent(usage.costUsd());
         Optional<StopReason> stop = response.stopReason();
         if (stop.isPresent() && !StopReason.END_TURN.equals(stop.get())) return Optional.empty();
         String text = response.content().stream().flatMap(b -> b.text().stream()).map(t -> t.text()).findFirst().orElse("");
@@ -166,7 +167,7 @@ public class ClaudeFailureExplainer implements FailureExplainer {
     public static class Provider implements FailureExplainer.Provider {
         @Override
         public FailureExplainer create(HealerConfig config) {
-            String key = System.getenv("ANTHROPIC_API_KEY");
+            String key = config.get("healer.llm.apiKey", System.getenv("ANTHROPIC_API_KEY"));
             if (key == null || key.isBlank()) return FailureExplainer.NONE;
             return new ClaudeFailureExplainer(ClaudeHealerProvider.client(config, key), config);
         }

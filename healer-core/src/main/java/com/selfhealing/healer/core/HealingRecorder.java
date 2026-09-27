@@ -45,6 +45,9 @@ public final class HealingRecorder {
         public String lastUrl;
         /** Failure analysis, for failed tests. */
         public FailureTriage.Result triage;
+        /** Report-relative paths of a Playwright video and trace of this test (browser.video / browser.trace). */
+        public String video;
+        public String trace;
     }
 
     private static final int MAX_NOTES = 20;
@@ -86,6 +89,20 @@ public final class HealingRecorder {
         t.status = status;
         t.error = error;
         t.durationMs = java.time.Duration.between(t.startedAt, Instant.now()).toMillis();
+    }
+
+    /** The running test failed (its failure was already analysed or recorded) - e.g. to keep a video only then. */
+    public static boolean currentTestFailed() {
+        TestRecord t = TESTS.get(currentTest());
+        return t != null && (t.triage != null || "FAILED".equals(t.status));
+    }
+
+    /** Attaches a video or trace to the running test (kind: video | trace). */
+    public static void attach(String kind, String reportRelativePath) {
+        TestRecord t = TESTS.get(currentTest());
+        if (t == null) return;
+        if ("video".equals(kind)) t.video = reportRelativePath;
+        else t.trace = reportRelativePath;
     }
 
     public static String currentTest() {

@@ -172,6 +172,7 @@ public class ClaudeLocatorHealer implements LocatorHealer {
 
     private Attempt ask(String system, String askModel, String prompt, String key, List<HeuristicMatcher.Scored> candidates) {
         Attempt none = new Attempt(Optional.empty(), 0, 0, 0);
+        if (!LlmPricing.withinBudget()) return none;
         if (calls.incrementAndGet() > maxCalls) {
             System.out.println("[healer] Claude call budget reached (healer.llm.maxCallsPerRun=" + maxCalls + "), skipping " + key);
             return none;
@@ -200,6 +201,7 @@ public class ClaudeLocatorHealer implements LocatorHealer {
                 + response.usage().cacheCreationInputTokens().orElse(0L);
         long out = response.usage().outputTokens();
         double cost = Math.max(0, LlmPricing.cost(askModel, in, out));
+        LlmPricing.spent(cost);
 
         Optional<StopReason> stop = response.stopReason();
         if (stop.isPresent() && !StopReason.END_TURN.equals(stop.get())) {

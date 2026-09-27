@@ -17,9 +17,9 @@ public class ClaudeHealerProvider implements LocatorHealerProvider {
     @Override
     public LocatorHealer create(HealerConfig config) {
         if (!config.llmEnabled()) return LocatorHealer.NONE;
-        String key = System.getenv("ANTHROPIC_API_KEY");
+        String key = config.get("healer.llm.apiKey", System.getenv("ANTHROPIC_API_KEY"));
         if (key == null || key.isBlank()) {
-            System.out.println("[healer] healer.llm.enabled=true but ANTHROPIC_API_KEY is not set - Claude stage disabled");
+            System.out.println("[healer] healer.llm.enabled=true but no API key (healer.llm.apiKey / ANTHROPIC_API_KEY) - Claude stage disabled");
             return LocatorHealer.NONE;
         }
         return new ClaudeLocatorHealer(client(config, key), config);

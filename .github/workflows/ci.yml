@@ -24,7 +24,7 @@ jobs:
         run: |
           mvn -B -q install -DskipTests
           mvn -B -q -pl healer-playwright exec:java -Dexec.mainClass=com.microsoft.playwright.CLI \
-              -Dexec.args="install --with-deps chromium" -Dexec.classpathScope=test
+              -Dexec.args="install --with-deps chromium ffmpeg" -Dexec.classpathScope=test
 
       # Unit tests, browser integration tests and the accuracy benchmark (fails on any wrong heal
       # or on accuracy below the thresholds in HealingBenchmarkTest). No API key: Claude is not called.

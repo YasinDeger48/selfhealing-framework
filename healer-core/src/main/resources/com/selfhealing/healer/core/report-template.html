@@ -70,7 +70,8 @@
   .triage .hint { color: var(--muted); } .triage .kv { font-family: var(--mono); font-size: 12px; word-break: break-all; }
   .triage ul { margin: 4px 0 0; padding-inline-start: 18px; font-family: var(--mono); font-size: 12px; }
   .triage .shot img { max-width: 100%; border: 1px solid var(--border); border-radius: 8px; cursor: zoom-in; }
-  .pill.cat { background: #ffe3e3; color: #c92a2a; font-weight: 700; } .reasons { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .pill.cat { background: #ffe3e3; color: #c92a2a; font-weight: 700; }
+  .media { margin: 8px 0 12px; font-size: 13px; } .reasons { font-size: 12px; color: var(--muted); margin-top: 3px; }
 
   /* Pills */
   .pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap; }
@@ -547,6 +548,13 @@ function renderTriage(t) {
     </div></div>`;
 }
 
+function renderMedia(t) {
+  const links = [];
+  if (t.video) links.push(`&#127916; <a href="${esc(t.video)}">${L("video")}</a>`);
+  if (t.trace) links.push(`&#128269; <a href="${esc(t.trace)}">${L("trace")}</a> <span class="tmeta" dir="ltr">npx playwright show-trace ${esc(t.trace)}</span>`);
+  return links.length ? `<div class="media">${links.join(" &nbsp; ")}</div>` : "";
+}
+
 function renderTests() {
   // keep the user's open/closed choices across re-renders (language switch, filter)
   const open = new Set([...document.querySelectorAll("#tests details[open]")].map(d => d.dataset.id));
@@ -572,7 +580,7 @@ function renderTests() {
       <summary>${statusPill(t)}<div class="tname"><span class="cls">${esc(t.className || "")} ›</span> ${esc(t.method || t.id)}</div>
         <span class="tmeta hide-sm">${L("stepsHeals", (t.steps || []).length, t.healed.length)}</span>
         <span class="tmeta">${dur(t.durationMs || 0)} · ${costPill(t.cost)}</span><span class="chev">&#9656;</span></summary>
-      <div class="tbody">${t.error ? `<div class="error">${esc(t.error)}</div>` : ""}${renderTriage(t)}<div class="steps">${steps || `<div class="empty">${L("noSteps")}</div>`}</div>${failedHeals}</div>
+      <div class="tbody">${t.error ? `<div class="error">${esc(t.error)}</div>` : ""}${renderTriage(t)}${renderMedia(t)}<div class="steps">${steps || `<div class="empty">${L("noSteps")}</div>`}</div>${failedHeals}</div>
     </details>`;
   }).join("") || `<div class="card empty">${L("noTests")}</div>`;
   document.querySelectorAll("#tests details").forEach(d => { if (open.has(d.dataset.id) || allOpen) d.open = true; });

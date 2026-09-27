@@ -64,7 +64,12 @@ public final class HealingRun {
         return runtime;
     }
 
+    private boolean off() {
+        return !runtime.engine().config().enabled();
+    }
+
     public void testStarted(String testId, String className, String method, String displayName) {
+        if (off()) return;
         HealingRecorder.startTest(testId, className, method, displayName);
     }
 
@@ -73,6 +78,7 @@ public final class HealingRun {
      * Throws an AssertionError when healer.failOnHeal=true and something needed healing.
      */
     public List<HealingEvent> testBodyFinished(String testId) {
+        if (off()) return List.of();
         List<HealingEvent> healed = HealingRecorder.eventsFor(testId).stream().filter(HealingEvent::needsReview).toList();
         if (healed.isEmpty()) return healed;
         double cost = healed.stream().mapToDouble(e -> e.llmCostUsd).sum();
@@ -103,12 +109,13 @@ public final class HealingRun {
     public void analyse(String testId, Throwable error, boolean pageOpen) {
         try {
             HealingRecorder.TestRecord record = HealingRecorder.test(testId);
-            if (record == null || record.triage != null
-                    || "off".equalsIgnoreCase(runtime.engine().config().get("healer.triage", "on"))) return;
+            HealerConfig config = runtime.engine().config();
+            if (record == null || record.triage != null || !config.enabled()
+                    || "off".equalsIgnoreCase(config.get("healer.triage", "on"))) return;
             String url = pageOpen ? runtime.currentUrl() : null;
             FailureTriage.Result result = FailureTriage.classify(error, record, HealingRecorder.eventsFor(testId),
                     url != null ? url : record.lastUrl);
-            if (pageOpen) result.screenshot = runtime.failureScreenshot(testId);
+            if (pageOpen && config.screenshots() != HealerConfig.Screenshots.NONE) result.screenshot = runtime.failureScreenshot(testId);
             record.triage = result;
         } catch (RuntimeException ignored) {
             // the analysis must never hide the real failure
@@ -140,6 +147,7 @@ public final class HealingRun {
      * Platform after discovery), it writes again only if tests, steps or heals were added since the last report.
      */
     public synchronized void finish(boolean pdf) {
+        if (off()) return;
         String state = state();
         if (state.equals(reported)) return;
         reported = state;
@@ -172,10 +180,13 @@ public final class HealingRun {
             // a safety net: some runner setups report success although tests failed (see README, Surefire note)
             System.out.println("[healer] " + failed.size() + " test(s) FAILED: " + String.join(", ", failed));
         }
-        if (pdf && Boolean.parseBoolean(config.get("healer.report.pdf", "true"))) {
+        if (pdf && config.pdfReport()) {
             runtime.exportPdf(html, reportDir.resolve("healing-report.pdf"), config)
                     .ifPresent(file -> System.out.println("[healer] PDF report:  " + file.toAbsolutePath()));
         }
+        ReportHistory.keep(config);
+        boolean warn = events.stream().anyMatch(HealingEvent::needsReview);
+        ReportOpener.openIfWanted(html, config, !failed.isEmpty(), warn);
     }
 
     private static String state() {

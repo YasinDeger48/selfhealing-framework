@@ -197,6 +197,32 @@ class SelfHealingPageIntegrationTest {
     }
 
     @Test
+    void videoAndTraceAreKeptOnlyForFailedTests() throws Exception {
+        System.setProperty("browser.video", "failures");
+        System.setProperty("browser.trace", "failures");
+        try {
+            SelfHealingPage.resetForTests();   // reload the settings
+            com.microsoft.playwright.BrowserContext passed = HealerBrowser.newContext(browser);
+            passed.newPage().setContent("<p>passing test</p>");
+            HealerBrowser.close(passed);
+            HealingRecorder.TestRecord record = HealingRecorder.test(test);
+            assertEquals(null, record.video, "a passing test keeps no video");
+            assertEquals(null, record.trace);
+
+            record.triage = new com.selfhealing.healer.core.FailureTriage.Result();   // the test has failed
+            com.microsoft.playwright.BrowserContext failed = HealerBrowser.newContext(browser);
+            failed.newPage().setContent("<p>failing test</p>");
+            HealerBrowser.close(failed);
+            java.nio.file.Path reportDir = SelfHealingPage.engine().config().reportDir();
+            assertTrue(record.trace.endsWith(".zip") && java.nio.file.Files.exists(reportDir.resolve(record.trace)), record.trace);
+            assertTrue(record.video.endsWith(".webm") && java.nio.file.Files.exists(reportDir.resolve(record.video)), record.video);
+        } finally {
+            System.clearProperty("browser.video");
+            System.clearProperty("browser.trace");
+        }
+    }
+
+    @Test
     void elementInsideShadowDomIsHealed() {
         page.setContent("<newsletter-box></newsletter-box><script>"
                 + "customElements.define('newsletter-box', class extends HTMLElement { connectedCallback() {"

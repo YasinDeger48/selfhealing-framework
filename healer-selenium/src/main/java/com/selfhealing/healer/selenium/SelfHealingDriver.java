@@ -54,7 +54,7 @@ public class SelfHealingDriver {
         this.adapter = new SeleniumPageAdapter(driver);
         HealerConfig config = engine().config();
         this.verbose = Boolean.parseBoolean(config.get("healer.verbose", "true"));
-        this.screenshots = Boolean.parseBoolean(config.get("healer.screenshots", "true"));
+        this.screenshots = config.screenshots() == HealerConfig.Screenshots.ALL;   // heal screenshots
     }
 
     public static SelfHealingDriver wrap(WebDriver driver) {
@@ -125,8 +125,11 @@ public class SelfHealingDriver {
     WebElement resolve(String key, By by) {
         HealingEngine eng = engine();
         HealerConfig config = eng.config();
-        if (by instanceof IntentBy intent) return resolveIntent(key, intent, eng, config);
-        if (config.mode() == HealerConfig.Mode.OFF) return driver.findElement(by);
+        if (by instanceof IntentBy intent) {
+            if (!config.enabled()) throw new IllegalStateException("healer.find(\"" + key + "\", ...) needs the healer, but healer.enabled=false");
+            return resolveIntent(key, intent, eng, config);
+        }
+        if (config.mode() == HealerConfig.Mode.OFF || !config.enabled()) return driver.findElement(by);
         SeleniumSelectors.Parsed parsed = SeleniumSelectors.parse(by);
         String selector = parsed.selector();
         LocatorQuality.Entry quality = observeQuality(key, by, parsed, config);
@@ -237,7 +240,7 @@ public class SelfHealingDriver {
     /** Before an interaction: closes a layer (cookie banner, modal) that covers the element - see {@link SeleniumPopups}. */
     void clearObstruction(String key, By by, WebElement target) {
         HealerConfig config = engine().config();
-        if (config.mode() == HealerConfig.Mode.OFF || "off".equalsIgnoreCase(config.get("healer.popups", "auto"))) return;
+        if (config.mode() == HealerConfig.Mode.OFF || !config.enabled() || "off".equalsIgnoreCase(config.get("healer.popups", "auto"))) return;
         SeleniumPopups.clear(adapter, key, SeleniumSelectors.parse(by).selector(), target, verbose);
     }
 

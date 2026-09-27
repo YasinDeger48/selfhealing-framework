@@ -33,21 +33,21 @@ adapters: healing, popups, locator quality, failure analysis, reports and code f
 <dependency>
   <groupId>io.github.yasindeger48</groupId>
   <artifactId>healer-playwright</artifactId>
-  <version>2.1.0</version>
+  <version>2.2.0</version>
   <scope>test</scope>
 </dependency>
 <!-- optional: Claude stage -->
 <dependency>
   <groupId>io.github.yasindeger48</groupId>
   <artifactId>healer-claude</artifactId>
-  <version>2.1.0</version>
+  <version>2.2.0</version>
   <scope>test</scope>
 </dependency>
 ```
 
 Use `healer-selenium` instead of `healer-playwright` for Selenium. Then add the module of your test runner:
 `healer-junit5`, `healer-junit4`, `healer-testng` or `healer-cucumber` (for JUnit 5 the adapters also contain an
-extension of their own, so `healer-junit5` is optional there). Gradle: `testImplementation("io.github.yasindeger48:healer-playwright:2.1.0")`.
+extension of their own, so `healer-junit5` is optional there). Gradle: `testImplementation("io.github.yasindeger48:healer-playwright:2.2.0")`.
 Building from source instead: `mvn install` in this repository, then use the same coordinates.
 
 **2. Wrap your Playwright page and give each element a stable name:**
@@ -304,13 +304,98 @@ the failure into a likely cause: **element missing**, **covered element**, **une
 Claude adds a one-or-two sentence explanation and a next step per failed test (masked evidence, about $0.001 per test).
 Each failed test card in the report shows the analysis; the Failed KPI shows the causes.
 
-## Configuration — `healer.properties` on the test classpath (or `-D<name>=<value>`)
+## Configuration
+
+### Where settings come from
+
+Settings are read in layers; a later layer overrides an earlier one:
+
+1. `src/test/resources/healer.properties` - the project's shared settings (commit it)
+2. `healer-<profile>.properties` - when a profile is set: `-Dhealer.profile=ci`, `HEALER_PROFILE=ci` or
+   `healer.profile=ci` in the file (e.g. headless and no report opening on CI)
+3. `healer-local.properties` - **personal** settings, not committed (add it to `.gitignore`); on the classpath or in
+   the project folder. E.g. `browser.headless=false` on your machine only.
+4. environment variables - `HEALER_REPORT_OPEN=always` -> `healer.report.open`, `BROWSER_HEADLESS=false` ->
+   `browser.headless`, `APP_BASEURL=...` -> `app.baseUrl`
+5. system properties - `-Dhealer.mode=suggest`, `-Dbrowser.name=firefox`
+
+Values can reference the environment or system properties: `${env:NAME}`, `${env:NAME:-default}`, `${sys:name}`.
+A misspelled setting is reported at start-up: `unknown setting 'healer.reprot.open' - did you mean 'healer.report.open'?`
+
+**API key:** never write the key itself into a committed file. Use the default (`ANTHROPIC_API_KEY` environment
+variable), a reference (`healer.llm.apiKey=${env:MY_CLAUDE_KEY}`), or put it in the uncommitted `healer-local.properties`.
+
+### Example `healer.properties`
+
+```properties
+# --- healing
+healer.mode=auto
+healer.probeTimeoutMs=3000
+healer.language=en
+
+# --- report
+healer.report.open=onWarn          # never | always | onFailure | onWarn - never on CI
+healer.report.pdf=auto             # auto = not on CI
+healer.report.screenshots=all      # all | failures | none
+healer.report.history=true         # keep every run in target/healer-report/history/<timestamp>
+healer.report.historyKeep=10
+
+# --- browser (HealerBrowser for Playwright, HealerDriver for Selenium)
+browser.name=msedge                # chromium | msedge | chrome | firefox | webkit
+browser.headless=true
+browser.slowmo=0
+browser.viewport=1280x900
+browser.timeoutMs=15000
+browser.video=failures             # off | failures | all   (Playwright)
+browser.trace=failures             # off | failures | all   (Playwright)
+app.baseUrl=https://my.app.example
+
+# --- Claude
+healer.llm.enabled=true
+healer.llm.apiKey=${env:ANTHROPIC_API_KEY}
+healer.llm.model=claude-haiku-4-5
+healer.llm.maxCostPerRun=1.00      # USD for all Claude calls of a run; empty = no limit
+# healer.llm.price.claude-haiku-4-5=1.00,5.00   (USD per million input,output tokens)
+```
+
+and `healer-ci.properties` next to it:
+
+```properties
+browser.headless=true
+healer.report.open=never
+healer.verbose=false
+```
+
+### Browser setup from the settings
+
+Test projects no longer need to hard-code the browser:
+
+```java
+// Playwright
+Browser browser = HealerBrowser.launch(playwright);          // browser.name, headless, slowmo
+BrowserContext context = HealerBrowser.newContext(browser);  // viewport, timeout, video/trace recording
+page.navigate(HealerBrowser.url("/login"));                  // app.baseUrl + path
+HealerBrowser.close(context);                                // in @AfterEach: keeps video/trace for failed tests
+
+// Selenium
+WebDriver driver = HealerDriver.create();                    // browser.name, headless, viewport, timeouts
+driver.get(HealerDriver.url("/login"));
+```
+
+Videos and traces of kept tests are linked on the test in the report (`npx playwright show-trace <file>` opens a
+trace). Video needs Playwright's ffmpeg - with an installed browser (`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD`) install it
+once: `mvn exec:java -e -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install ffmpeg"`; without it the
+run continues without video.
+
+### All settings
 
 | Setting | Default | Meaning |
 |---|---|---|
+| `healer.enabled` | `true` | `false` turns the healer off completely: no healing, reports, analysis or Claude calls |
+| `healer.profile` | (empty) | Loads `healer-<profile>.properties` on top |
 | `healer.language` | `en` | Language of console trace, demo overlay and the report's default: `en`, `de`, `ru`, `ja`, `tr`, `ar` |
-| `healer.mode` | `auto` | `off` / `suggest` (report the replacement, fail the step - for teams that want no automatic heals) / `auto` (heal, continue, WARN) |
-| `healer.runId` | (empty) | Same value for all JVMs of one build → one merged report (forkCount > 1) |
+| `healer.mode` | `auto` | `off` / `suggest` (report the replacement, fail the step) / `auto` (heal, continue, WARN) |
+| `healer.runId` | (empty) | Same value for all JVMs of one build -> one merged report (forkCount > 1) |
 | `healer.probeTimeoutMs` | `3000` | Wait for the original selector before healing (SPA render delay) |
 | `healer.minConfidence` | `0.60` | Matches below this score are rejected |
 | `healer.minMargin` | `0.08` | Best match must beat the runner-up by this much |
@@ -329,13 +414,27 @@ Each failed test card in the report shows the analysis; the Failed KPI shows the
 | `healer.verbose` | `true` | Print every healing step to the console |
 | `healer.visual` | `false` | Draw the healing steps on the page (headed demos) |
 | `healer.visual.pauseMs` | `1200` | Pause between drawn steps |
-| `healer.screenshots` | `true` | Screenshot of each healed element for the report |
-| `healer.report.pdf` | `true` | Also write the PDF report |
+| `healer.report.open` | `never` | Open the HTML report after the run: `never`, `always`, `onFailure`, `onWarn` (failures or heals). Never on CI |
+| `healer.report.pdf` | `auto` | Also write the PDF report; `auto` = not on CI |
 | `healer.report.pdfBrowser` | `msedge` | Browser for PDF printing: `msedge`, `chrome`, `chromium` |
-| `healer.llm.enabled` | `false` | Enable the Claude stage (needs `healer-claude` + `ANTHROPIC_API_KEY`) |
+| `healer.report.screenshots` | `all` | `all` (heals and failures), `failures`, `none` - keeps big runs' reports small |
+| `healer.report.history` | `false` | Keep a copy of every run's report in `history/<timestamp>/` |
+| `healer.report.historyKeep` | `10` | Number of history entries kept |
+| `browser.name` | `msedge` | `chromium`, `msedge`, `chrome`, `firefox`, `webkit` (`HealerBrowser` / `HealerDriver`) |
+| `browser.headless` | `true` | Headless browser |
+| `browser.slowmo` | `0` | Milliseconds between browser actions (Playwright) |
+| `browser.viewport` | `1280x900` | Window / viewport size |
+| `browser.timeoutMs` | `15000` | Default action timeout (Playwright) / page load and script timeout (Selenium) |
+| `browser.video` | `off` | `off`, `failures`, `all` - Playwright video, linked in the report |
+| `browser.trace` | `off` | `off`, `failures`, `all` - Playwright trace, linked in the report |
+| `app.baseUrl` | (empty) | Base URL of the application: `HealerBrowser.url(path)` / `HealerDriver.url(path)` |
+| `healer.llm.enabled` | `false` | Enable the Claude stage (needs `healer-claude` and an API key) |
+| `healer.llm.apiKey` | `ANTHROPIC_API_KEY` | The key or a reference: `${env:MY_KEY}` - never commit the key itself |
 | `healer.llm.model` | `claude-haiku-4-5` | First model asked |
 | `healer.llm.escalateTo` | `claude-opus-5` | Asked when the first model is not confident (empty = off) |
-| `healer.llm.escalateOnNoMatch` | `true` | Also escalate when the first model answers "no match"; `false` keeps the cost of genuinely removed elements at one cheap call |
+| `healer.llm.escalateOnNoMatch` | `true` | Also escalate when the first model answers "no match" |
+| `healer.llm.maxCostPerRun` | (no limit) | USD budget for all Claude calls of a run (heals and failure explanations); then Claude is skipped |
+| `healer.llm.price.<model>` | built-in list | Price per million tokens `input,output`, e.g. `healer.llm.price.claude-haiku-4-5=1.00,5.00` |
 | `healer.llm.logPrompts` | `false` | Save every Claude request (after masking) for audit |
 | `healer.privacy.mask` | `true` | Mask personal/secret data before it is sent to Claude |
 | `healer.privacy.patterns` | (empty) | Extra masking rules: `NAME=regex;NAME2=regex` |
