@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.github.yasindeger48</groupId>
+    <artifactId>healer-parent</artifactId>
+    <version>2.1.0</version>
+  </parent>
+  <artifactId>healer-junit5</artifactId>
+  <name>Healer JUnit 5</name>
+  <description>JUnit 5 (Jupiter) extension: reports, WARN blocks and failure analysis for healer-playwright or healer-selenium tests.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.github.yasindeger48</groupId>
+      <artifactId>healer-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.github.yasindeger48</groupId>
+      <artifactId>healer-playwright</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-launcher</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <!-- the module's test runs a JUnit 5 class through the JUnit Platform launcher, in a real browser -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <argLine>-Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8</argLine>
+          <excludes>
+            <exclude>**/LoginFlow.java</exclude>
+          </excludes>
+          <systemPropertyVariables>
+            <healer.llm.enabled>false</healer.llm.enabled>
+            <healer.report.pdf>false</healer.report.pdf>
+            <healer.verbose>false</healer.verbose>
+            <healer.probeTimeoutMs>600</healer.probeTimeoutMs>
+            <healer.storeDir>target/junit5-store</healer.storeDir>
+            <healer.reportDir>target/junit5-report</healer.reportDir>
+          </systemPropertyVariables>
+          <environmentVariables>
+            <PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD>1</PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD>
+          </environmentVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

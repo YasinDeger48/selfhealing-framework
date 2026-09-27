@@ -48,6 +48,7 @@
     <module>healer-testng</module>
     <module>healer-cucumber</module>
     <module>healer-junit4</module>
+    <module>healer-junit5</module>
   </modules>
 
   <properties>
@@ -98,6 +99,11 @@
       <dependency>
         <groupId>io.github.yasindeger48</groupId>
         <artifactId>healer-junit4</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.yasindeger48</groupId>
+        <artifactId>healer-junit5</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

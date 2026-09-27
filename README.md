@@ -16,6 +16,7 @@ project — add it as a dependency, wrap your locators, done.
 | `io.github.yasindeger48:healer-playwright` | Playwright adapter (`SelfHealingPage`, `HealingLocator`), JUnit 5 extension, HTML/PDF report |
 | `io.github.yasindeger48:healer-selenium` | Selenium WebDriver adapter (`SelfHealingDriver`, `HealingElement`), JUnit 5 extension, HTML/PDF report |
 | `io.github.yasindeger48:healer-testng` | TestNG listener (registers itself) - use with either adapter instead of the JUnit 5 extension |
+| `io.github.yasindeger48:healer-junit5` | JUnit 5 (Jupiter) extension for either adapter - `@ExtendWith(HealingExtension.class)` or auto-detection |
 | `io.github.yasindeger48:healer-junit4` | JUnit 4 rule - `@Rule public HealingRule healing = new HealingRule();` |
 | `io.github.yasindeger48:healer-cucumber` | Cucumber plugin - scenarios become report tests, Gherkin steps become report steps |
 | `io.github.yasindeger48:healer-claude` | Optional last healing stage backed by the Claude API — enabled by adding it to the classpath |
@@ -44,8 +45,9 @@ adapters: healing, popups, locator quality, failure analysis, reports and code f
 </dependency>
 ```
 
-Use `healer-selenium` instead of `healer-playwright` for Selenium, and add `healer-testng` or `healer-cucumber` if
-you do not use JUnit 5. Gradle: `testImplementation("io.github.yasindeger48:healer-playwright:2.1.0")`.
+Use `healer-selenium` instead of `healer-playwright` for Selenium. Then add the module of your test runner:
+`healer-junit5`, `healer-junit4`, `healer-testng` or `healer-cucumber` (for JUnit 5 the adapters also contain an
+extension of their own, so `healer-junit5` is optional there). Gradle: `testImplementation("io.github.yasindeger48:healer-playwright:2.1.0")`.
 Building from source instead: `mvn install` in this repository, then use the same coordinates.
 
 **2. Wrap your Playwright page and give each element a stable name:**
@@ -115,6 +117,10 @@ The description is matched locally first (visible text, label, aria-label, place
 The selector and fingerprint are saved, so later runs cost nothing and a changed element is healed like any other.
 Look-alikes the description cannot tell apart (three identical "Add" buttons) fail the step instead of guessing.
 Resolved steps are shown in the report as information, never as a WARN.
+
+**JUnit 5 with either adapter:** `healer-junit5` offers one extension for Playwright and Selenium:
+`@ExtendWith(com.selfhealing.healer.junit5.HealingExtension.class)` - or no annotation at all with
+`junit.jupiter.extensions.autodetection.enabled=true` in `src/test/resources/junit-platform.properties`.
 
 **TestNG or Cucumber instead of JUnit 5.** Everything else stays the same (adapter, `healer.locator` / `healer.element`,
 `healer.properties`); only the test-framework hook changes:
