@@ -55,6 +55,9 @@ public final class HealingRecorder {
     private static final List<HealingEvent> EVENTS = Collections.synchronizedList(new ArrayList<>());
     private static final Map<String, TestRecord> TESTS = Collections.synchronizedMap(new LinkedHashMap<>());
     private static final ThreadLocal<String> CURRENT_TEST = new ThreadLocal<>();
+    /** The test that last ran on this thread - still known in TestNG's @AfterMethod, which runs after the test ended. */
+    private static final ThreadLocal<String> LAST_TEST = new ThreadLocal<>();
+    private static final Map<String, List<java.util.function.Consumer<String>>> ON_FINISH = new java.util.concurrent.ConcurrentHashMap<>();
     private static final AtomicInteger EVENT_IDS = new AtomicInteger();
     private static final Instant RUN_STARTED = Instant.now();
 
@@ -67,6 +70,7 @@ public final class HealingRecorder {
 
     public static void startTest(String testId, String className, String method, String displayName) {
         CURRENT_TEST.set(testId);
+        LAST_TEST.set(testId);
         TestRecord t = new TestRecord();
         t.id = testId;
         t.className = className;
@@ -89,17 +93,53 @@ public final class HealingRecorder {
         t.status = status;
         t.error = error;
         t.durationMs = java.time.Duration.between(t.startedAt, Instant.now()).toMillis();
+        List<java.util.function.Consumer<String>> waiting = ON_FINISH.remove(testId);
+        if (waiting != null) {
+            for (java.util.function.Consumer<String> action : waiting) {
+                try {
+                    action.accept(outcome(testId));
+                } catch (RuntimeException ignored) {
+                    // clean-up must never fail the test
+                }
+            }
+        }
     }
 
-    /** The running test failed (its failure was already analysed or recorded) - e.g. to keep a video only then. */
+    /** The running test, or the one that just ended on this thread (TestNG runs @AfterMethod after the test ended). */
+    public static String currentOrLastTest() {
+        String t = CURRENT_TEST.get();
+        if (t == null) t = LAST_TEST.get();
+        return t == null ? "(outside test)" : t;
+    }
+
+    /**
+     * FAILED, PASSED or SKIPPED - or null while it is not known yet: JUnit 4 runs @After inside the test, before
+     * the failure reaches the rule.
+     */
+    public static String outcome(String testId) {
+        TestRecord t = TESTS.get(testId);
+        if (t == null) return null;
+        if (t.triage != null || "FAILED".equals(t.status)) return "FAILED";
+        return "RUNNING".equals(t.status) ? null : t.status;
+    }
+
+    /** Runs the action with the outcome once the test is finished (for decisions that need the outcome). */
+    public static void whenFinished(String testId, java.util.function.Consumer<String> action) {
+        ON_FINISH.computeIfAbsent(testId, k -> Collections.synchronizedList(new ArrayList<>())).add(action);
+    }
+
+    /** The running (or just ended) test failed - e.g. to keep a video only then. */
     public static boolean currentTestFailed() {
-        TestRecord t = TESTS.get(currentTest());
-        return t != null && (t.triage != null || "FAILED".equals(t.status));
+        return "FAILED".equals(outcome(currentOrLastTest()));
     }
 
-    /** Attaches a video or trace to the running test (kind: video | trace). */
+    /** Attaches a video or trace to the running (or just ended) test (kind: video | trace). */
     public static void attach(String kind, String reportRelativePath) {
-        TestRecord t = TESTS.get(currentTest());
+        attach(currentOrLastTest(), kind, reportRelativePath);
+    }
+
+    public static void attach(String testId, String kind, String reportRelativePath) {
+        TestRecord t = TESTS.get(testId);
         if (t == null) return;
         if ("video".equals(kind)) t.video = reportRelativePath;
         else t.trace = reportRelativePath;

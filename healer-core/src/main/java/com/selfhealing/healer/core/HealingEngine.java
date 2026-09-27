@@ -114,15 +114,23 @@ public class HealingEngine {
             }
         }
         List<ElementSnapshot> candidates = page.collectCandidates();
-        List<HeuristicMatcher.Scored> ranked = fp == null ? List.of() : matcher.rank(fp.getElement(), candidates);
+        // What the step does with the element (fill, select, check ...) - the only thing a cold start may know of its kind.
+        String action = ActionHint.current();
+        String kind = ActionHint.requiredKind(action);
+        boolean derived = fp != null && "derived".equals(fp.getOrigin());
+        if (kind == null && derived) kind = HeuristicMatcher.kindFromName(fp.getElement());   // ...-button, ...-input
+        List<HeuristicMatcher.Scored> ranked = fp == null ? List.of()
+                : matcher.rank(fp.getElement(), candidates, derived && (kind != null || action != null));
 
         // Candidates the guards rule out whatever their score - another list item, the opposite control, a field for a
         // button - are neither accepted locally nor offered to the LLM (safer, and no LLM call if nothing is left).
         ElementSnapshot target = fp == null ? null : fp.getElement();
+        String neededKind = target != null && !HeuristicMatcher.knowsKind(target) ? kind : null;
         // Nor is an element that another locator knows as its own (tab-specs when tab-reviews was removed).
-        Set<String> others = otherKnownElements(key, target);
+        Map<String, String> others = otherKnownElements(key, target);
         List<HeuristicMatcher.Scored> plausible = target == null ? ranked
                 : ranked.stream().filter(s -> HeuristicMatcher.compatible(target, s.candidate()))
+                        .filter(s -> HeuristicMatcher.fitsAction(neededKind, s.candidate()))
                         .filter(s -> !isKnownElsewhere(s.candidate(), others)).toList();
 
         // 2. Local heuristic
@@ -161,7 +169,8 @@ public class HealingEngine {
                 int matches = page.count(s.get().selector());
                 listener.validated(key, s.get().selector(), matches);
                 ElementSnapshot element = matches == 1 ? page.snapshot(s.get().selector()) : null;
-                if (matches == 1 && (target == null || element == null || HeuristicMatcher.compatible(target, element))) {
+                if (matches == 1 && (target == null || element == null || HeuristicMatcher.compatible(target, element))
+                        && (element == null || HeuristicMatcher.fitsAction(neededKind, element))) {
                     HealingSuggestion validated = new HealingSuggestion(s.get().selector(), HealingSuggestion.Source.LLM,
                             s.get().confidence(), s.get().reasoning(), element, diff(fp, element), s.get().usage());
                     if (coldStart && element != null) learn(key, originalSelector, page.url(), element, listener);
@@ -178,18 +187,28 @@ public class HealingEngine {
         } else {
             HeuristicMatcher.Scored best = ranked.get(0);
             double margin = best.score() - (ranked.size() > 1 ? ranked.get(1).score() : 0);
-            reason = String.format("best match %s scored %.2f (min %.2f), margin %.2f (min %.2f)%s",
+            reason = String.format("best match %s scored %.2f (min %.2f), margin %.2f (min %.2f)%s%s",
                     best.candidate().describe(), best.score(), config.minConfidence(), margin, config.minMargin(),
+                    ruledOut(best.candidate(), target, others, neededKind),
                     config.llmEnabled() ? "; LLM healer did not return a valid match" : "; LLM healer disabled");
         }
         return new Result(null, reason, ranked, llmUsage);
+    }
+
+    /** Why a candidate was not taken whatever its score - so the message does not read like a threshold problem. */
+    private static String ruledOut(ElementSnapshot c, ElementSnapshot target, Map<String, String> others, String kind) {
+        if (!HeuristicMatcher.fitsAction(kind, c)) return " - but the step needs an element that is " + kind;
+        String owner = knownElsewhere(c, others);
+        if (owner != null) return " - but it is the element of locator '" + owner + "', so it is not taken over";
+        if (target != null && !HeuristicMatcher.compatible(target, c)) return " - but it is a different kind of element";
+        return "";
     }
 
     /**
      * data-testid and id values of the elements other locators were recorded with - except locators recorded on the
      * same element as this one (two page objects may point at one element in different ways).
      */
-    private Set<String> otherKnownElements(String key, ElementSnapshot target) {
+    private Map<String, String> otherKnownElements(String key, ElementSnapshot target) {
         Set<String> mine = new java.util.HashSet<>();
         if (target != null) {
             for (String attr : List.of("data-testid", "id")) {
@@ -197,24 +216,29 @@ public class HealingEngine {
                 if (v != null && !v.isBlank()) mine.add(attr + "=" + v);
             }
         }
-        Set<String> out = new java.util.HashSet<>();
+        Map<String, String> out = new java.util.HashMap<>();   // "id=x" -> locator key
         fingerprints.all().forEach((k, f) -> {
             if (k.equals(key) || f.getElement() == null) return;
             if (List.of("data-testid", "id").stream().anyMatch(a -> mine.contains(a + "=" + f.getElement().attr(a)))) return;
             for (String attr : List.of("data-testid", "id")) {
                 String v = f.getElement().attr(attr);
-                if (v != null && !v.isBlank()) out.add(attr + "=" + v);
+                if (v != null && !v.isBlank()) out.putIfAbsent(attr + "=" + v, k);
             }
         });
         return out;
     }
 
-    private static boolean isKnownElsewhere(ElementSnapshot c, Set<String> others) {
+    private static boolean isKnownElsewhere(ElementSnapshot c, Map<String, String> others) {
+        return knownElsewhere(c, others) != null;
+    }
+
+    /** The other locator this element belongs to, or null. */
+    private static String knownElsewhere(ElementSnapshot c, Map<String, String> others) {
         for (String attr : List.of("data-testid", "id")) {
             String v = c.attr(attr);
-            if (v != null && !v.isBlank() && others.contains(attr + "=" + v)) return true;
+            if (v != null && !v.isBlank() && others.containsKey(attr + "=" + v)) return others.get(attr + "=" + v);
         }
-        return false;
+        return null;
     }
 
     /** Stores the healed element as the fingerprint of an element that never had a recorded one. */

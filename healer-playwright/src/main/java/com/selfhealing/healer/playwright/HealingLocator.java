@@ -2,6 +2,7 @@ package com.selfhealing.healer.playwright;
 
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.options.WaitForSelectorState;
+import com.selfhealing.healer.core.ActionHint;
 import com.selfhealing.healer.core.HealingEvent;
 import com.selfhealing.healer.core.HealingRecorder;
 import com.selfhealing.healer.core.Messages;
@@ -64,7 +65,13 @@ public class HealingLocator {
     private <T> T step(String action, String detail, Function<Locator, T> body) {
         HealingRecorder.Step step = HealingRecorder.step(key, action, detail);
         try {
-            Locator locator = raw();
+            Locator locator;
+            ActionHint.set(action);   // a cold start knows from "fill" that the element is a field
+            try {
+                locator = raw();
+            } finally {
+                ActionHint.clear();
+            }
             T result = body.apply(locator);
             linkHeal(step);   // after the action: a popup closed during it is linked too
             return result;

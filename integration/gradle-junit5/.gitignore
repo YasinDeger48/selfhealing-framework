@@ -1,2 +1,4 @@
 build/
 .gradle/
+# personal settings (healer-local.properties)
+healer-local.properties

@@ -43,13 +43,36 @@ public class HeuristicMatcher {
     }
 
     public List<Scored> rank(ElementSnapshot fingerprint, List<ElementSnapshot> candidates) {
+        return rank(fingerprint, candidates, false);
+    }
+
+    /**
+     * @param acrossNames cold start of a field: the old selector's name (id, test id ...) may now be in any of the
+     *                    candidate's names or its label, and may be part of it (login-username -> username-input)
+     */
+    public List<Scored> rank(ElementSnapshot fingerprint, List<ElementSnapshot> candidates, boolean acrossNames) {
         return candidates.stream()
-                .map(c -> score(fingerprint, c))
+                .map(c -> score(fingerprint, c, acrossNames))
                 .sorted(Comparator.comparingDouble(Scored::score).reversed())
                 .toList();
     }
 
     public Scored score(ElementSnapshot fp, ElementSnapshot c) {
+        return score(fp, c, false);
+    }
+
+    private static final List<String> NAMES = List.of("id", "data-testid", "data-qa", "name", "aria-label", "placeholder");
+
+    private static double bestName(String expected, ElementSnapshot c) {
+        double best = 0;
+        for (String attr : NAMES) best = Math.max(best, Similarity.contained(expected, c.attr(attr)));
+        best = Math.max(best, Similarity.contained(expected, c.getLabelText()));
+        // a button's or link's own words: login-submit-button -> "Log In"
+        if (c.getText() != null && c.getText().length() <= 40) best = Math.max(best, Similarity.contained(expected, c.getText()));
+        return best;
+    }
+
+    public Scored score(ElementSnapshot fp, ElementSnapshot c, boolean acrossNames) {
         Map<String, Double> signals = new LinkedHashMap<>();
         if (fp.getTag() != null) signals.put("tag", tagSimilarity(fp, c)); // a selector-derived fingerprint may lack it
 
@@ -66,6 +89,13 @@ public class HeuristicMatcher {
                 sim = expected.equalsIgnoreCase(actual) ? 1 : 0;
             } else if (IDENTIFIERS.contains(attr)) {
                 sim = Similarity.identifier(expected, actual);
+                if (acrossNames) {
+                    double across = bestName(expected, c);
+                    if (across > sim) {
+                        sim = across;
+                        absent.remove(attr);
+                    }
+                }
             } else {
                 sim = Similarity.text(expected, actual);
             }
@@ -185,6 +215,48 @@ public class HeuristicMatcher {
         if (fp.getTag() == null || c.getTag() == null) return 0;
         if (fp.getTag().equals(c.getTag())) return 1;
         return family(fp) != null && family(fp).equals(family(c)) ? 0.7 : 0;
+    }
+
+    /** True when the fingerprint says what kind of element it is (button, field ...) - then compatible() guards it. */
+    public static boolean knowsKind(ElementSnapshot fp) {
+        return family(fp) != null;
+    }
+
+    /**
+     * The kind the old selector's own name states - login-submit-button, email-input, country-select - or null.
+     * A cold start has no tag; the name's control-type word is the next best evidence.
+     */
+    public static String kindFromName(ElementSnapshot fp) {
+        for (String attr : List.of("data-testid", "id", "data-qa", "name")) {
+            Set<String> t = Similarity.tokens(fp.attr(attr));
+            if (t.contains("button") || t.contains("btn") || t.contains("link") || t.contains("lnk")) return "clickable";
+            if (t.contains("checkbox") || t.contains("chk") || t.contains("radio") || t.contains("toggle") || t.contains("switch")) return "checkable";
+            if (t.contains("select") || t.contains("dropdown") || t.contains("combo") || t.contains("combobox")) return "select";
+            if (t.contains("input") || t.contains("field") || t.contains("textbox") || t.contains("textarea") || t.contains("txt")) return "editable";
+        }
+        return null;
+    }
+
+    private static final Set<String> NOT_TYPEABLE = Set.of("button", "submit", "reset", "checkbox", "radio", "image",
+            "hidden", "file", "range", "color");
+
+    /** Whether the candidate can take the action: editable (fill), select, checkable (check) - or any when kind is null. */
+    public static boolean fitsAction(String kind, ElementSnapshot c) {
+        if (kind == null) return true;
+        String tag = c.getTag() == null ? "" : c.getTag();
+        String type = c.attr("type") == null ? "" : c.attr("type").toLowerCase(java.util.Locale.ROOT);
+        String role = c.attr("role") == null ? "" : c.attr("role");
+        return switch (kind) {
+            case "editable" -> ("input".equals(tag) && !NOT_TYPEABLE.contains(type)) || "textarea".equals(tag)
+                    || role.equals("textbox") || role.equals("searchbox");
+            case "select" -> "select".equals(tag) || role.equals("combobox") || role.equals("listbox");
+            case "checkable" -> ("input".equals(tag) && (type.equals("checkbox") || type.equals("radio")))
+                    || role.equals("checkbox") || role.equals("switch") || role.equals("radio");
+            case "clickable" -> "button".equals(tag) || "a".equals(tag) || "summary".equals(tag)
+                    || ("input".equals(tag) && (type.equals("submit") || type.equals("button") || type.equals("image")))
+                    || role.equals("button") || role.equals("link") || role.equals("menuitem") || role.equals("tab");
+            default -> true;
+        };
     }
 
     /** Elements that can stand in for each other, e.g. a button re-tagged as a link. */

@@ -16,6 +16,7 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -206,8 +207,14 @@ class SelfHealingPageIntegrationTest {
             passed.newPage().setContent("<p>passing test</p>");
             HealerBrowser.close(passed);
             HealingRecorder.TestRecord record = HealingRecorder.test(test);
+            // closed inside the running test (JUnit 4 @After): the outcome is not known yet - kept for now ...
+            java.nio.file.Path provisional = SelfHealingPage.engine().config().reportDir().resolve(record.video);
+            assertTrue(java.nio.file.Files.exists(provisional), "kept until the outcome is known");
+            HealingRecorder.finishTest(test, "PASSED", null);
+            // ... and dropped when the test passes
             assertEquals(null, record.video, "a passing test keeps no video");
             assertEquals(null, record.trace);
+            assertFalse(java.nio.file.Files.exists(provisional), "the provisional video is deleted");
 
             record.triage = new com.selfhealing.healer.core.FailureTriage.Result();   // the test has failed
             com.microsoft.playwright.BrowserContext failed = HealerBrowser.newContext(browser);

@@ -49,6 +49,8 @@ public final class HealerBrowser {
     private static final Map<BrowserContext, Recording> RECORDING = new ConcurrentHashMap<>();
     /** Set when video recording failed because Playwright's ffmpeg is missing: not tried again in this run. */
     private static volatile boolean videoUnavailable;
+    /** Set once a page with video recording opened: ffmpeg is there. */
+    private static volatile boolean videoVerified;
 
     private HealerBrowser() {
     }
@@ -78,16 +80,26 @@ public final class HealerBrowser {
         boolean trace = !"off".equalsIgnoreCase(c.get("browser.trace", "off"));
         Browser.NewContextOptions o = new Browser.NewContextOptions().setViewportSize(size[0], size[1]);
         if (video && !videoUnavailable) o.setRecordVideoDir(c.reportDir().resolve("videos").resolve(".recording")).setRecordVideoSize(size[0], size[1]);
-        BrowserContext context;
+        BrowserContext context = null;
         try {
             context = browser.newContext(o);
+            if (video && !videoVerified) {
+                // Some Playwright versions only look for ffmpeg when the first page opens - try one before the test does.
+                Page probe = context.newPage();
+                Video recording = probe.video();
+                probe.close();
+                if (recording != null) recording.delete();
+                videoVerified = true;
+            }
         } catch (com.microsoft.playwright.PlaywrightException e) {
             if (!video || e.getMessage() == null || !e.getMessage().contains("ffmpeg")) throw e;
             // Video needs Playwright's ffmpeg, which is not downloaded when tests use an installed browser.
             videoUnavailable = true;
+            // The failed context is left open (closed with the browser): closing it drops the whole connection in
+            // older Playwright versions (1.45).
             System.out.println("[healer] browser.video needs Playwright's ffmpeg - recording without video. Install it once:"
                     + " mvn exec:java -e -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args=\"install ffmpeg\"");
-            context = browser.newContext(o.setRecordVideoDir(null));
+            context = browser.newContext(o.setRecordVideoDir(null).setRecordVideoSize(null));
             video = false;
         }
         if (videoUnavailable) video = false;
@@ -99,22 +111,32 @@ public final class HealerBrowser {
 
     /** Closes the context; keeps the video and trace if browser.video / browser.trace say so for this test's result. */
     public static void close(BrowserContext context) {
+        if (context == null) return;   // newContext failed - nothing to close
         Recording r = RECORDING.remove(context);
         HealerConfig c = config();
-        boolean failed = HealingRecorder.currentTestFailed();
-        String name = safe(HealingRecorder.currentTest());
+        String test = HealingRecorder.currentOrLastTest();
+        String outcome = HealingRecorder.outcome(test);
+        boolean failed = "FAILED".equals(outcome);
+        // JUnit 4: @After runs before the failure is known - keep the files for now, drop them if the test passes.
+        boolean pending = outcome == null;
+        Map<String, Path> provisional = new java.util.LinkedHashMap<>();   // kind -> file
+        String name = safe(test);
+        String traceMode = c.get("browser.trace", "off");
         if (r != null && r.trace()) {
-            if (keep(c.get("browser.trace", "off"), failed)) {
+            if (keep(traceMode, failed) || (pending && "failures".equalsIgnoreCase(traceMode))) {
                 Path file = c.reportDir().resolve("traces").resolve(name + ".zip");
                 context.tracing().stop(new Tracing.StopOptions().setPath(file));
-                HealingRecorder.attach("trace", "traces/" + file.getFileName());
+                HealingRecorder.attach(test, "trace", "traces/" + file.getFileName());
+                if (!keep(traceMode, failed)) provisional.put("trace", file);
             } else {
                 context.tracing().stop();
             }
         }
         List<Video> videos = r != null && r.video() ? context.pages().stream().map(Page::video).filter(Objects::nonNull).toList() : List.of();
         context.close();
-        boolean keepVideo = r != null && r.video() && keep(c.get("browser.video", "off"), failed);
+        String videoMode = c.get("browser.video", "off");
+        boolean videoOnlyIfFailed = !keep(videoMode, failed) && pending && "failures".equalsIgnoreCase(videoMode);
+        boolean keepVideo = r != null && r.video() && (keep(videoMode, failed) || videoOnlyIfFailed);
         int n = 0;
         for (Video v : videos) {
             try {
@@ -124,13 +146,27 @@ public final class HealerBrowser {
                     Path target = c.reportDir().resolve("videos").resolve(file);
                     Files.createDirectories(target.getParent());
                     Files.move(recorded, target, StandardCopyOption.REPLACE_EXISTING);
-                    if (n == 1) HealingRecorder.attach("video", "videos/" + file);
+                    if (n == 1) HealingRecorder.attach(test, "video", "videos/" + file);
+                    if (videoOnlyIfFailed) provisional.put("video", target);
                 } else {
                     Files.deleteIfExists(recorded);
                 }
             } catch (IOException | RuntimeException e) {
                 System.out.println("[healer] video not kept: " + e.getMessage());
             }
+        }
+        if (!provisional.isEmpty()) {
+            HealingRecorder.whenFinished(test, result -> {
+                if ("FAILED".equals(result)) return;
+                provisional.forEach((kind, p) -> {
+                    try {
+                        Files.deleteIfExists(p);
+                    } catch (IOException ignored) {
+                        // best effort
+                    }
+                    HealingRecorder.attach(test, kind, null);
+                });
+            });
         }
         try {   // the recording folder is only a work area
             Path recording = c.reportDir().resolve("videos").resolve(".recording");

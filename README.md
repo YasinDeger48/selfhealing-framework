@@ -419,7 +419,7 @@ run continues without video.
 | `healer.fix.sourceDirs` | `src/test/java,src/main/java,…` | Where to look for selectors (also Kotlin/Groovy/Scala and `src/*/resources`) |
 | `healer.fix.extensions` | `java,kt,groovy,scala,properties,json,yaml,yml` | Files searched for selectors |
 | `healer.verbose` | `true` | Print every healing step to the console |
-| `healer.visual` | `false` | Draw the healing steps on the page (headed demos) |
+| `healer.visual` | `false` | Draw the healing steps on the page (headed demos) - Playwright and Selenium; use with `browser.headless=false` |
 | `healer.visual.pauseMs` | `1200` | Pause between drawn steps |
 | `healer.report.open` | `never` | Open the HTML report after the run: `never`, `always`, `onFailure`, `onWarn` (failures or heals). Never on CI |
 | `healer.report.pdf` | `auto` | Also write the PDF report; `auto` = not on CI |

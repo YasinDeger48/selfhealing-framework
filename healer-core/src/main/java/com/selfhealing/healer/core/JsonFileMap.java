@@ -76,11 +76,38 @@ public class JsonFileMap<V> {
                 change.accept(current);
                 Path tmp = file.resolveSibling(file.getFileName() + "." + ProcessHandle.current().pid() + ".tmp");
                 Json.MAPPER.writeValue(tmp.toFile(), current);
-                Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
                 entries = current;
+                replace(tmp);
             }
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot write " + file, e);
+        }
+    }
+
+    /**
+     * Moves the new file into place. On Windows a virus scanner, OneDrive or an IDE may hold the file for a moment
+     * (AccessDeniedException): retried, and if it stays locked the change is kept in memory - it is written with the
+     * next change - instead of failing the test.
+     */
+    private void replace(Path tmp) throws IOException {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                return;
+            } catch (java.nio.file.FileSystemException locked) {
+                if (attempt >= 10) {
+                    Files.deleteIfExists(tmp);
+                    System.out.println("[healer] could not save " + file + " (" + locked.getClass().getSimpleName()
+                            + " - is another program holding it?); kept in memory and saved with the next change");
+                    return;
+                }
+                try {
+                    Thread.sleep(50L * attempt);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw locked;
+                }
+            }
         }
     }
 }

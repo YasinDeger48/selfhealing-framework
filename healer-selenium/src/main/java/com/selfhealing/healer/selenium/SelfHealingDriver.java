@@ -3,6 +3,7 @@ package com.selfhealing.healer.selenium;
 import com.selfhealing.healer.core.CallSite;
 import com.selfhealing.healer.core.HealerConfig;
 import com.selfhealing.healer.core.HealingEngine;
+import com.selfhealing.healer.core.HealingListener;
 import com.selfhealing.healer.core.HealingEvent;
 import com.selfhealing.healer.core.HealingRecorder;
 import com.selfhealing.healer.core.HealingSuggestion;
@@ -48,6 +49,7 @@ public class SelfHealingDriver {
     private final SeleniumPageAdapter adapter;
     private final boolean verbose;
     private final boolean screenshots;
+    private final SeleniumVisualizer visualizer;
 
     private SelfHealingDriver(WebDriver driver) {
         this.driver = driver;
@@ -55,6 +57,8 @@ public class SelfHealingDriver {
         HealerConfig config = engine().config();
         this.verbose = Boolean.parseBoolean(config.get("healer.verbose", "true"));
         this.screenshots = config.screenshots() == HealerConfig.Screenshots.ALL;   // heal screenshots
+        this.visualizer = config.getBoolean("healer.visual", false)
+                ? new SeleniumVisualizer(adapter, config.getLong("healer.visual.pauseMs", 1200)) : null;
     }
 
     public static SelfHealingDriver wrap(WebDriver driver) {
@@ -169,9 +173,10 @@ public class SelfHealingDriver {
 
         long probeWait = System.currentTimeMillis() - started;
         HealingTrace trace = new HealingTrace(verbose ? HealingTrace.console() : null);
-        trace.broken(key, selector, probeWait);
+        HealingListener listener = visualizer == null ? trace : HealingListener.of(List.of(trace, visualizer));
+        listener.broken(key, selector, probeWait);
         long healStart = System.currentTimeMillis();
-        HealingEngine.Result result = eng.heal(key, selector, adapter, trace);
+        HealingEngine.Result result = eng.heal(key, selector, adapter, listener);
 
         HealingEvent event = toEvent(key, selector, parsed.literal(), by, result, eng);
         event.trace = trace.lines();
@@ -214,7 +219,8 @@ public class SelfHealingDriver {
             trace.title(key);
             trace.note("info", "trace.intent.start", intent.description);
             long started = System.currentTimeMillis();
-            HealingEngine.Result result = eng.resolveIntent(key, intent.description, adapter, trace);
+            HealingListener listener = visualizer == null ? trace : HealingListener.of(List.of(trace, visualizer));
+            HealingEngine.Result result = eng.resolveIntent(key, intent.description, adapter, listener);
             HealingEvent event = toEvent(key, selectorKey, null, intent, result, eng);
             event.kind = "intent";
             event.healDurationMs = System.currentTimeMillis() - started;

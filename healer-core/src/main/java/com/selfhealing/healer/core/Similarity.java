@@ -80,6 +80,28 @@ public final class Similarity {
     }
 
     private static final double ROLE_WORD_MATCH = 0.9;
+
+    /**
+     * One name inside the other once separators, control-type words and generated parts are dropped:
+     * login-username contains user-name and username-input ("username"). 0 when neither contains the other or the
+     * shorter part is too short to mean anything. Used for cold starts, where only the old selector's name is known.
+     */
+    public static double contained(String a, String b) {
+        String ja = joinedName(a);
+        String jb = joinedName(b);
+        String shorter = ja.length() <= jb.length() ? ja : jb;
+        String longer = shorter == ja ? jb : ja;
+        if (shorter.length() < 4 || !longer.contains(shorter)) return 0;
+        return 0.5 + 0.3 * shorter.length() / longer.length();
+    }
+
+    static String joinedName(String s) {
+        if (s == null) return "";
+        String spaced = s.replaceAll("([a-z])([A-Z])", "$1 $2");
+        return Arrays.stream(normalize(spaced).split("[^a-z0-9]+"))
+                .filter(t -> !t.isEmpty() && !ROLE_WORDS.contains(t) && !GENERATED.matcher(t).matches())
+                .collect(Collectors.joining());
+    }
     /** Words that name the kind of control rather than its purpose; renamed freely (input -> field, select -> dropdown). */
     private static final java.util.Set<String> ROLE_WORDS = java.util.Set.of("input", "field", "fld", "box", "textbox", "txt",
             "button", "btn", "select", "dropdown", "combo", "combobox", "picker", "link", "lnk", "anchor", "checkbox", "chk",

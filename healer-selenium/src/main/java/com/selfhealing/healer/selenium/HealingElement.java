@@ -1,5 +1,6 @@
 package com.selfhealing.healer.selenium;
 
+import com.selfhealing.healer.core.ActionHint;
 import com.selfhealing.healer.core.HealingEvent;
 import com.selfhealing.healer.core.HealingRecorder;
 import com.selfhealing.healer.core.Messages;
@@ -68,7 +69,14 @@ public class HealingElement {
     private <T> T step(String action, String detail, Function<WebElement, T> body) {
         HealingRecorder.Step step = HealingRecorder.step(key, action, detail);
         try {
-            T result = body.apply(raw());
+            WebElement element;
+            ActionHint.set(action);   // a cold start knows from "fill" that the element is a field
+            try {
+                element = raw();
+            } finally {
+                ActionHint.clear();
+            }
+            T result = body.apply(element);
             linkHeal(step);
             return result;
         } catch (RuntimeException e) {

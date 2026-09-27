@@ -94,6 +94,72 @@ class HealingEngineTest {
         assertFalse(strict.heal("Login.username", "#login-username", page).healed(), "unvalidated selector must be rejected");
     }
 
+    /** The login page after a release: every name of the username field changed, "username" is still in them. */
+    private static FakePage changedLogin(boolean withUsername) {
+        FakePage page = new FakePage();
+        page.elements.add(HeuristicMatcherTest.el("div", "", List.of("form#login-form"), "id", "login-error", "data-testid", "login-error-message"));
+        page.elements.add(HeuristicMatcherTest.el("form", "Username Password Sign in", List.of("div#login-card"), "id", "login-form", "data-testid", "login-form"));
+        if (withUsername) {
+            ElementSnapshot user = HeuristicMatcherTest.el("input", "", List.of("form#login-form"),
+                    "id", "user-name", "data-testid", "username-input", "name", "username", "type", "text");
+            user.setLabelText("Username");
+            page.elements.add(user);
+        }
+        ElementSnapshot pass = HeuristicMatcherTest.el("input", "", List.of("form#login-form"),
+                "id", "login-password", "data-testid", "password-input", "name", "pass", "type", "password");
+        pass.setLabelText("Password");
+        page.elements.add(pass);
+        return page;
+    }
+
+    @Test
+    void coldStartFillFindsTheRenamedFieldNeverADiv(@TempDir Path dir) {
+        HealingEngine engine = engine(dir, false, null);   // nothing recorded: only the old selector is known
+        ActionHint.set("fill");
+        try {
+            HealingEngine.Result r = engine.heal("LoginPage.username", "#login-username", changedLogin(true));
+            assertTrue(r.healed(), "login-username -> user-name / username-input: " + r.failureReason());
+            assertEquals("#user-name", r.suggestion().selector());
+        } finally {
+            ActionHint.clear();
+        }
+    }
+
+    @Test
+    void coldStartFillOfARemovedFieldIsNotHealedOntoAnotherOne(@TempDir Path dir) {
+        HealingEngine engine = engine(dir, false, null);
+        ActionHint.set("fill");
+        try {
+            HealingEngine.Result r = engine.heal("LoginPage.username", "#login-username", changedLogin(false));
+            assertFalse(r.healed(), "the password field is not the username field");
+        } finally {
+            ActionHint.clear();
+        }
+    }
+
+    @Test
+    void coldStartButtonIsFoundByItsWordsNotByAParagraph(@TempDir Path dir) {
+        FakePage page = changedLogin(true);
+        page.elements.add(HeuristicMatcherTest.el("button", "Log In", List.of("form#login-form"),
+                "id", "btn-signin", "data-testid", "signin-button", "type", "submit"));
+        page.elements.add(HeuristicMatcherTest.el("p", "Demo user: standard_user / secret123", List.of("form#login-form"),
+                "id", "demo-hint", "data-testid", "login-demo-hint"));
+        ActionHint.set("click");
+        try {
+            HealingEngine.Result r = engine(dir, false, null).heal("LoginPage.loginButton", "[data-testid='login-submit-button']", page);
+            assertTrue(r.healed(), "login-submit-button -> the \"Log In\" button: " + r.failureReason());
+            assertEquals("#btn-signin", r.suggestion().selector());
+        } finally {
+            ActionHint.clear();
+        }
+    }
+
+    @Test
+    void coldStartWithoutAnActionStaysAsStrictAsBefore(@TempDir Path dir) {
+        HealingEngine.Result r = engine(dir, false, null).heal("LoginPage.username", "#login-username", changedLogin(true));
+        assertFalse(r.healed() && !"#user-name".equals(r.suggestion().selector()), "never a div or form");
+    }
+
     @Test
     void neverHealsOntoAnElementAnotherLocatorOwns(@TempDir Path dir) {
         HealingEngine engine = engine(dir, false, null);
@@ -108,7 +174,10 @@ class HealingEngineTest {
 
         FakePage page = new FakePage();
         page.elements.add(specs);   // the reviews tab was removed
-        assertFalse(engine.heal("Product.reviewsTab", "#tab-reviews", page).healed(), "specs belongs to another locator");
+        HealingEngine.Result refused = engine.heal("Product.reviewsTab", "#tab-reviews", page);
+        assertFalse(refused.healed(), "specs belongs to another locator");
+        assertTrue(refused.failureReason().contains("element of locator 'Product.specsTab'"),
+                "the message says why a good score was not enough: " + refused.failureReason());
 
         FakePage renamed = new FakePage();
         renamed.elements.add(specs);
