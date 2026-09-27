@@ -8,17 +8,13 @@ import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.ui.Select;
 
-import java.util.Locale;
 import java.util.function.Function;
-import java.util.regex.Pattern;
 
 /**
  * A named element whose locator heals itself. Every action finds the element again (no stale references) and is
  * recorded as a test step; interactions first close a layer that covers the element.
  */
 public class HealingElement {
-
-    private static final Pattern SECRET = Pattern.compile("pass|parola|secret|token|pin", Pattern.CASE_INSENSITIVE);
 
     private final SelfHealingDriver owner;
     private final String key;
@@ -115,7 +111,7 @@ public class HealingElement {
     }
 
     private String mask(String value) {
-        return SECRET.matcher(key.toLowerCase(Locale.ROOT)).find() ? "•".repeat(Math.min(8, value.length())) : value;
+        return com.selfhealing.healer.core.SecretNames.isSecret(key) ? "•".repeat(Math.min(8, value.length())) : value;
     }
 
     private static String firstLine(String message) {

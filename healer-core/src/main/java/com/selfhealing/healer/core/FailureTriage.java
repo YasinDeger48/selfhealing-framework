@@ -64,6 +64,12 @@ public final class FailureTriage {
             "java.lang.ArrayIndexOutOfBoundsException", "java.lang.StringIndexOutOfBoundsException",
             "java.lang.NumberFormatException", "java.lang.UnsupportedOperationException", "java.util.NoSuchElementException");
 
+    /** A broken test setup: missing dependency, wrong glue, bad constructor, undefined step ... */
+    private static final List<String> SETUP_ERRORS = List.of("CucumberException", "UndefinedStepException",
+            "AmbiguousStepDefinitionsException", "TestNGException", "ParameterResolutionException", "PreconditionViolationException",
+            "NoSuchMethodException", "ClassNotFoundException", "NoClassDefFoundError", "ExceptionInInitializerError",
+            "InstantiationException", "NoSuchFieldException");
+
     private FailureTriage() {
     }
 
@@ -100,6 +106,9 @@ public final class FailureTriage {
             r.category = Category.TIMEOUT;
         } else if (TEST_CODE_ERRORS.contains(root.getClass().getName()) && !text.contains("com.microsoft.playwright")) {
             r.category = Category.TEST_CODE;
+        } else if (classes.stream().anyMatch(c -> SETUP_ERRORS.stream().anyMatch(c::endsWith))
+                || text.contains("does not have a public zero-argument constructor")) {
+            r.category = Category.TEST_CODE;
         } else r.category = Category.UNKNOWN;
 
         // Observations that change how to read the failure.
@@ -131,7 +140,7 @@ public final class FailureTriage {
             case TIMEOUT -> "something did not happen in time";
             case NETWORK -> "the application or an API was unreachable or failing";
             case ENVIRONMENT -> "browser / machine problem, not the application";
-            case TEST_CODE -> "bug in the test code";
+            case TEST_CODE -> "bug in the test code or its setup";
             case UNKNOWN -> "no known pattern";
         };
     }

@@ -30,6 +30,10 @@ class FailureTriageTest {
         PlaywrightException(String m) { super(m); }
     }
 
+    static class CucumberException extends RuntimeException {
+        CucumberException(String m, Throwable cause) { super(m, cause); }
+    }
+
     private static HealingRecorder.TestRecord record(String... network) {
         HealingRecorder.TestRecord t = new HealingRecorder.TestRecord();
         t.id = "T.x";
@@ -59,6 +63,8 @@ class FailureTriageTest {
         assertEquals(NETWORK, classify(new PlaywrightException("page.navigate: net::ERR_CONNECTION_REFUSED at http://localhost:8080/")).category);
         assertEquals(ENVIRONMENT, classify(new PlaywrightException("Executable doesn't exist at C:\\ms-playwright\\chromium")).category);
         assertEquals(TEST_CODE, classify(new NullPointerException("Cannot invoke \"String.trim()\" because \"name\" is null")).category);
+        assertEquals(TEST_CODE, classify(new CucumberException("class Hooks does not have a public zero-argument constructor",
+                new NoSuchMethodException("Hooks.<init>()"))).category, "a broken setup is a test-code problem");
         assertEquals(UNKNOWN, classify(new RuntimeException("something odd")).category);
     }
 

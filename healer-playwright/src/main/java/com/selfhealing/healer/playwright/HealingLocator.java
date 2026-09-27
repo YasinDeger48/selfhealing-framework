@@ -6,17 +6,13 @@ import com.selfhealing.healer.core.HealingEvent;
 import com.selfhealing.healer.core.HealingRecorder;
 import com.selfhealing.healer.core.Messages;
 
-import java.util.Locale;
 import java.util.function.Function;
-import java.util.regex.Pattern;
 
 /**
  * A named element whose selector heals itself. Every action re-resolves the selector (so the
  * locator stays valid across navigations and re-renders) and is recorded as a test step.
  */
 public class HealingLocator {
-
-    private static final Pattern SECRET = Pattern.compile("pass|parola|secret|token|pin", Pattern.CASE_INSENSITIVE);
 
     private final SelfHealingPage owner;
     private final String key;
@@ -94,7 +90,7 @@ public class HealingLocator {
     }
 
     private String mask(String value) {
-        return SECRET.matcher(key.toLowerCase(Locale.ROOT)).find() ? "•".repeat(Math.min(8, value.length())) : value;
+        return com.selfhealing.healer.core.SecretNames.isSecret(key) ? "•".repeat(Math.min(8, value.length())) : value;
     }
 
     private static String firstLine(String message) {

@@ -6,7 +6,7 @@
   <parent>
     <groupId>io.github.yasindeger48</groupId>
     <artifactId>healer-parent</artifactId>
-    <version>2.0.0</version>
+    <version>2.0.1</version>
   </parent>
   <artifactId>healer-selenium</artifactId>
   <name>Healer Selenium</name>
@@ -21,9 +21,12 @@
       <groupId>org.seleniumhq.selenium</groupId>
       <artifactId>selenium-java</artifactId>
     </dependency>
+    <!-- only for the JUnit 5 extension; optional so TestNG and Cucumber projects do not get JUnit on the classpath
+         (Maven Surefire would then pick its JUnit provider and run no TestNG test) -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-api</artifactId>
+      <optional>true</optional>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>

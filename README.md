@@ -30,20 +30,20 @@ adapters: healing, popups, locator quality, failure analysis, reports and code f
 <dependency>
   <groupId>io.github.yasindeger48</groupId>
   <artifactId>healer-playwright</artifactId>
-  <version>2.0.0</version>
+  <version>2.0.1</version>
   <scope>test</scope>
 </dependency>
 <!-- optional: Claude stage -->
 <dependency>
   <groupId>io.github.yasindeger48</groupId>
   <artifactId>healer-claude</artifactId>
-  <version>2.0.0</version>
+  <version>2.0.1</version>
   <scope>test</scope>
 </dependency>
 ```
 
 Use `healer-selenium` instead of `healer-playwright` for Selenium, and add `healer-testng` or `healer-cucumber` if
-you do not use JUnit 5. Gradle: `testImplementation("io.github.yasindeger48:healer-playwright:2.0.0")`.
+you do not use JUnit 5. Gradle: `testImplementation("io.github.yasindeger48:healer-playwright:2.0.1")`.
 Building from source instead: `mvn install` in this repository, then use the same coordinates.
 
 **2. Wrap your Playwright page and give each element a stable name:**
