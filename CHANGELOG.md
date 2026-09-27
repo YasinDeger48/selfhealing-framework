@@ -3,7 +3,7 @@
 All notable changes. Versions follow [semantic versioning](https://semver.org); coordinates
 `io.github.yasindeger48:healer-*`.
 
-## [2.2.1]
+## [2.2.1] - unreleased (on GitHub, not yet on Maven Central)
 
 ### Fixed
 - `.healer/fingerprints.json` was still rewritten on every run with only new timestamps: an empty label or text is not
