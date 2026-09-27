@@ -92,9 +92,13 @@ jobs:
         with:
           gradle-version: "8.10"
 
+      # .mvn/maven.config uses paths relative to the repository root, so the version is read there
+      - name: Framework version
+        id: version
+        run: echo "version=$(mvn -B -q help:evaluate -Dexpression=project.version -DforceStdout)" >> "$GITHUB_OUTPUT"
+
       - name: Gradle test
         working-directory: integration/gradle-junit5
         run: |
-          VERSION=$(mvn -B -q -f ../../pom.xml help:evaluate -Dexpression=project.version -DforceStdout)
-          gradle --no-daemon test -PhealerVersion="$VERSION" -Pbrowser=chromium
+          gradle --no-daemon test -PhealerVersion="${{ steps.version.outputs.version }}" -Pbrowser=chromium
           python3 check-report.py
