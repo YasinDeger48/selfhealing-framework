@@ -4,7 +4,6 @@ import java.nio.file.Path;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * The test-framework independent part of a run: test lifecycle, WARN blocks, failure analysis, and - once at the
@@ -13,11 +12,52 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class HealingRun {
 
+    private static volatile HealingRun shared;
+    /** Set by the Cucumber plugin: scenarios are then its tests, not the TestNG/JUnit methods that run them. */
+    private static volatile boolean cucumberActive;
+
     private final HealingRuntime runtime;
-    private final AtomicBoolean finished = new AtomicBoolean();
+    /** What the last report contained; a later finish() writes again only if something new happened. */
+    private String reported;
 
     public HealingRun(HealingRuntime runtime) {
         this.runtime = runtime;
+    }
+
+    /**
+     * The run of this JVM, shared by every integration (JUnit 5, JUnit 4, TestNG, Cucumber), so one report holds
+     * everything. The first caller's runtime is used; a shutdown hook writes the report if no integration did.
+     */
+    public static HealingRun shared(HealingRuntime runtime) {
+        if (shared == null) {
+            synchronized (HealingRun.class) {
+                if (shared == null) {
+                    HealingRun run = new HealingRun(runtime);
+                    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                        try {
+                            run.finish(false);   // no browser for the PDF while the JVM is shutting down
+                        } catch (Throwable ignored) {
+                            // best effort
+                        }
+                    }, "healer-report"));
+                    shared = run;
+                }
+            }
+        }
+        return shared;
+    }
+
+    /** The shared run with the adapter found on the classpath (see {@link HealingRuntime#discover()}). */
+    public static HealingRun shared() {
+        return shared != null ? shared : shared(HealingRuntime.discover());
+    }
+
+    public static void cucumberActive() {
+        cucumberActive = true;
+    }
+
+    public static boolean isCucumberActive() {
+        return cucumberActive;
     }
 
     public HealingRuntime runtime() {
@@ -90,9 +130,19 @@ public final class HealingRun {
         HealingRecorder.finishTest(testId, "SKIPPED", reason);
     }
 
-    /** Once per JVM at the end of the run: failure explanations, code fixes, locator quality, JSON/HTML/PDF reports. */
+    /** At the end of the run: failure explanations, code fixes, locator quality, JSON/HTML/PDF reports. */
     public void finish() {
-        if (!finished.compareAndSet(false, true)) return;
+        finish(true);
+    }
+
+    /**
+     * Writes the reports. Called again (some runners signal "finished" more than once, e.g. TestNG on the JUnit
+     * Platform after discovery), it writes again only if tests, steps or heals were added since the last report.
+     */
+    public synchronized void finish(boolean pdf) {
+        String state = state();
+        if (state.equals(reported)) return;
+        reported = state;
         HealerConfig config = runtime.engine().config();
         Path reportDir = config.reportDir();
         List<HealingEvent> events = HealingRecorder.all();
@@ -117,10 +167,22 @@ public final class HealingRun {
         Path html = ReportWriter.writeHtml(reportDir, model);
         System.out.println(ReportWriter.consoleSummary(events, html));
         System.out.println("[healer] HTML report: " + html.toAbsolutePath().toUri());
-        if (Boolean.parseBoolean(config.get("healer.report.pdf", "true"))) {
-            runtime.exportPdf(html, reportDir.resolve("healing-report.pdf"), config)
-                    .ifPresent(pdf -> System.out.println("[healer] PDF report:  " + pdf.toAbsolutePath()));
+        List<String> failed = HealingRecorder.tests().stream().filter(t -> "FAILED".equals(t.status)).map(t -> t.id).toList();
+        if (!failed.isEmpty()) {
+            // a safety net: some runner setups report success although tests failed (see README, Surefire note)
+            System.out.println("[healer] " + failed.size() + " test(s) FAILED: " + String.join(", ", failed));
         }
+        if (pdf && Boolean.parseBoolean(config.get("healer.report.pdf", "true"))) {
+            runtime.exportPdf(html, reportDir.resolve("healing-report.pdf"), config)
+                    .ifPresent(file -> System.out.println("[healer] PDF report:  " + file.toAbsolutePath()));
+        }
+    }
+
+    private static String state() {
+        List<HealingRecorder.TestRecord> tests = HealingRecorder.tests();
+        int steps = tests.stream().mapToInt(t -> t.steps.size()).sum();
+        String statuses = tests.stream().map(t -> t.status).reduce("", String::concat);
+        return HealingRecorder.all().size() + "/" + tests.size() + "/" + steps + "/" + statuses.hashCode();
     }
 
     /** Claude's short explanation for each failed test of this JVM (healer.triage.llm, default = healer.llm.enabled). */

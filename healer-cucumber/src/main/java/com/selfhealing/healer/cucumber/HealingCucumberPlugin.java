@@ -2,7 +2,6 @@ package com.selfhealing.healer.cucumber;
 
 import com.selfhealing.healer.core.HealingRecorder;
 import com.selfhealing.healer.core.HealingRun;
-import com.selfhealing.healer.core.HealingRuntime;
 import io.cucumber.plugin.ConcurrentEventListener;
 import io.cucumber.plugin.event.EventPublisher;
 import io.cucumber.plugin.event.PickleStepTestStep;
@@ -26,25 +25,20 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class HealingCucumberPlugin implements ConcurrentEventListener {
 
-    private static volatile HealingRun run;
     private final Map<Object, HealingRecorder.Step> gherkinSteps = new ConcurrentHashMap<>();
 
     private static HealingRun run() {
-        if (run == null) {
-            synchronized (HealingCucumberPlugin.class) {
-                if (run == null) run = new HealingRun(HealingRuntime.discover());
-            }
-        }
-        return run;
+        return HealingRun.shared();
     }
 
     @Override
     public void setEventPublisher(EventPublisher publisher) {
+        HealingRun.cucumberActive();   // the TestNG listener then leaves Cucumber's runScenario tests to this plugin
         publisher.registerHandlerFor(TestCaseStarted.class, this::scenarioStarted);
         publisher.registerHandlerFor(TestStepStarted.class, this::stepStarted);
         publisher.registerHandlerFor(TestStepFinished.class, this::stepFinished);
         publisher.registerHandlerFor(TestCaseFinished.class, this::scenarioFinished);
-        publisher.registerHandlerFor(TestRunFinished.class, e -> { if (run != null) run.finish(); });
+        publisher.registerHandlerFor(TestRunFinished.class, e -> run().finish());
     }
 
     private void scenarioStarted(TestCaseStarted e) {

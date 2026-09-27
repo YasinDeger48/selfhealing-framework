@@ -6,7 +6,7 @@
   <parent>
     <groupId>io.github.yasindeger48</groupId>
     <artifactId>healer-parent</artifactId>
-    <version>2.0.1</version>
+    <version>2.1.0</version>
   </parent>
   <artifactId>healer-testng</artifactId>
   <name>Healer TestNG</name>
@@ -55,7 +55,7 @@
           <dependency>
             <groupId>org.apache.maven.surefire</groupId>
             <artifactId>surefire-junit-platform</artifactId>
-            <version>3.5.3</version>
+            <version>3.6.0</version>
           </dependency>
         </dependencies>
         <configuration>
@@ -65,6 +65,9 @@
             <healer.report.pdf>false</healer.report.pdf>
             <healer.verbose>false</healer.verbose>
             <healer.probeTimeoutMs>600</healer.probeTimeoutMs>
+            <!-- set before anything runs: Surefire 3.6 starts TestNG for discovery, which already loads the healer config -->
+            <healer.storeDir>target/testng-store</healer.storeDir>
+            <healer.reportDir>target/testng-report</healer.reportDir>
           </systemPropertyVariables>
           <environmentVariables>
             <PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD>1</PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD>

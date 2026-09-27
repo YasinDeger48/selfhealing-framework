@@ -16,10 +16,12 @@ project — add it as a dependency, wrap your locators, done.
 | `io.github.yasindeger48:healer-playwright` | Playwright adapter (`SelfHealingPage`, `HealingLocator`), JUnit 5 extension, HTML/PDF report |
 | `io.github.yasindeger48:healer-selenium` | Selenium WebDriver adapter (`SelfHealingDriver`, `HealingElement`), JUnit 5 extension, HTML/PDF report |
 | `io.github.yasindeger48:healer-testng` | TestNG listener (registers itself) - use with either adapter instead of the JUnit 5 extension |
+| `io.github.yasindeger48:healer-junit4` | JUnit 4 rule - `@Rule public HealingRule healing = new HealingRule();` |
 | `io.github.yasindeger48:healer-cucumber` | Cucumber plugin - scenarios become report tests, Gherkin steps become report steps |
 | `io.github.yasindeger48:healer-claude` | Optional last healing stage backed by the Claude API — enabled by adding it to the classpath |
 
-Requirements: Java 17+, Playwright for Java **or** Selenium 4, JUnit 5 **or** TestNG 7 **or** Cucumber 7. Everything below works the same with both
+Requirements: Java 17+, Playwright for Java **or** Selenium 4, JUnit 5 **or** JUnit 4 **or** TestNG 7 **or** Cucumber 7,
+Maven Surefire **3.6.0+** (see the note below). Everything below works the same with both
 adapters: healing, popups, locator quality, failure analysis, reports and code fixes.
 
 ## Getting started in your project
@@ -30,20 +32,20 @@ adapters: healing, popups, locator quality, failure analysis, reports and code f
 <dependency>
   <groupId>io.github.yasindeger48</groupId>
   <artifactId>healer-playwright</artifactId>
-  <version>2.0.1</version>
+  <version>2.1.0</version>
   <scope>test</scope>
 </dependency>
 <!-- optional: Claude stage -->
 <dependency>
   <groupId>io.github.yasindeger48</groupId>
   <artifactId>healer-claude</artifactId>
-  <version>2.0.1</version>
+  <version>2.1.0</version>
   <scope>test</scope>
 </dependency>
 ```
 
 Use `healer-selenium` instead of `healer-playwright` for Selenium, and add `healer-testng` or `healer-cucumber` if
-you do not use JUnit 5. Gradle: `testImplementation("io.github.yasindeger48:healer-playwright:2.0.1")`.
+you do not use JUnit 5. Gradle: `testImplementation("io.github.yasindeger48:healer-playwright:2.1.0")`.
 Building from source instead: `mvn install` in this repository, then use the same coordinates.
 
 **2. Wrap your Playwright page and give each element a stable name:**
@@ -124,7 +126,14 @@ Resolved steps are shown in the report as information, never as a WARN.
   `@ConfigurationParameter(key = PLUGIN_PROPERTY_NAME, value = "com.selfhealing.healer.cucumber.HealingCucumberPlugin")`
   (JUnit Platform) or `plugin = "com.selfhealing.healer.cucumber.HealingCucumberPlugin"` (`@CucumberOptions`).
   Each scenario is a test in the report and its Gherkin steps are report steps; a failing step is analysed before the
-  `@After` hooks close the browser.
+  `@After` hooks close the browser. Works with every Cucumber runner (JUnit Platform, TestNG, JUnit 4); with Cucumber's
+  TestNG runner the scenarios are listed once, not also as TestNG `runScenario` tests.
+- **JUnit 4:** add `healer-junit4` and `@Rule public HealingRule healing = new HealingRule();` (e.g. in the base
+  class). The report is written when the JVM ends (or call `HealingRule.finishRun()`).
+
+> **Surefire version.** Use `maven-surefire-plugin` **3.6.0 or newer**. With 3.5.x, Cucumber on the JUnit Platform
+> (`@Suite`) runs the scenarios but Surefire counts none - **a failing scenario does not fail the build**. The healer
+> prints `[healer] N test(s) FAILED` at the end of every run as a safety net, whatever the build result says.
 
 **3. Run the suite once against a working build** — this records the fingerprints (`.healer/`).
 From then on, broken locators are healed. Commit `.healer/` to share the baseline with your team.

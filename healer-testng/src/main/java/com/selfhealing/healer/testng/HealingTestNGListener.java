@@ -1,7 +1,6 @@
 package com.selfhealing.healer.testng;
 
 import com.selfhealing.healer.core.HealingRun;
-import com.selfhealing.healer.core.HealingRuntime;
 import org.testng.IExecutionListener;
 import org.testng.IInvokedMethod;
 import org.testng.IInvokedMethodListener;
@@ -19,19 +18,26 @@ import java.util.stream.Collectors;
  */
 public class HealingTestNGListener implements ITestListener, IInvokedMethodListener, IExecutionListener {
 
-    private static volatile HealingRun run;
-
     private static HealingRun run() {
-        if (run == null) {
-            synchronized (HealingTestNGListener.class) {
-                if (run == null) run = new HealingRun(HealingRuntime.discover());
-            }
+        return HealingRun.shared();
+    }
+
+    /**
+     * Cucumber's TestNG runner (AbstractTestNGCucumberTests) runs each scenario as a TestNG test "runScenario". With the
+     * healer's Cucumber plugin active, the scenarios are recorded by the plugin - recording them here too would list
+     * every scenario twice.
+     */
+    static boolean ownedByCucumber(ITestResult result) {
+        if (!HealingRun.isCucumberActive()) return false;
+        for (Class<?> c = result.getTestClass().getRealClass(); c != null; c = c.getSuperclass()) {
+            if (c.getName().startsWith("io.cucumber.testng.")) return true;
         }
-        return run;
+        return false;
     }
 
     @Override
     public void onTestStart(ITestResult result) {
+        if (ownedByCucumber(result)) return;
         run().testStarted(testId(result), result.getTestClass().getRealClass().getSimpleName(),
                 result.getMethod().getMethodName(), description(result));
     }
@@ -39,7 +45,7 @@ public class HealingTestNGListener implements ITestListener, IInvokedMethodListe
     /** Right after the test method, before @AfterMethod closes the browser. */
     @Override
     public void afterInvocation(IInvokedMethod method, ITestResult result) {
-        if (!method.isTestMethod()) return;
+        if (!method.isTestMethod() || ownedByCucumber(result)) return;
         String id = testId(result);
         if (result.getStatus() == ITestResult.FAILURE && result.getThrowable() != null) {
             run().analyse(id, result.getThrowable(), true);
@@ -56,18 +62,21 @@ public class HealingTestNGListener implements ITestListener, IInvokedMethodListe
 
     @Override
     public void onTestSuccess(ITestResult result) {
+        if (ownedByCucumber(result)) return;
         run().testPassed(testId(result));
         run().testEnded();
     }
 
     @Override
     public void onTestFailure(ITestResult result) {
+        if (ownedByCucumber(result)) return;
         run().testFailed(testId(result), result.getThrowable());
         run().testEnded();
     }
 
     @Override
     public void onTestSkipped(ITestResult result) {
+        if (ownedByCucumber(result)) return;
         run().testSkipped(testId(result), result.getThrowable() == null ? null : result.getThrowable().getMessage());
         run().testEnded();
     }
@@ -79,7 +88,7 @@ public class HealingTestNGListener implements ITestListener, IInvokedMethodListe
 
     @Override
     public void onExecutionFinish() {
-        if (run != null) run.finish();
+        run().finish();
     }
 
     /** Class.method, plus the parameters of data-driven tests (each invocation is its own test in the report). */

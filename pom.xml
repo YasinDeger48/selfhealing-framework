@@ -6,7 +6,7 @@
 
   <groupId>io.github.yasindeger48</groupId>
   <artifactId>healer-parent</artifactId>
-  <version>2.0.1</version>
+  <version>2.1.0</version>
   <packaging>pom</packaging>
   <name>Self-Healing Locator Framework</name>
   <description>Self-healing locators for Playwright and Selenium tests: broken selectors are repaired locally or with
@@ -47,6 +47,7 @@
     <module>healer-selenium</module>
     <module>healer-testng</module>
     <module>healer-cucumber</module>
+    <module>healer-junit4</module>
   </modules>
 
   <properties>
@@ -93,6 +94,16 @@
         <groupId>io.github.yasindeger48</groupId>
         <artifactId>healer-cucumber</artifactId>
         <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.yasindeger48</groupId>
+        <artifactId>healer-junit4</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>junit</groupId>
+        <artifactId>junit</artifactId>
+        <version>4.13.2</version>
       </dependency>
       <dependency>
         <groupId>org.testng</groupId>
@@ -170,7 +181,7 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-surefire-plugin</artifactId>
-          <version>3.5.3</version>
+          <version>3.6.0</version>
         </plugin>
       </plugins>
     </pluginManagement>

@@ -26,7 +26,7 @@ public abstract class AbstractHealingExtension implements BeforeEachCallback, Af
     protected abstract HealingRuntime runtime();
 
     private HealingRun run(ExtensionContext context) {
-        return context.getRoot().getStore(NS).getOrComputeIfAbsent(RunCloser.class, k -> new RunCloser(new HealingRun(runtime())),
+        return context.getRoot().getStore(NS).getOrComputeIfAbsent(RunCloser.class, k -> new RunCloser(HealingRun.shared(runtime())),
                 RunCloser.class).run;
     }
 

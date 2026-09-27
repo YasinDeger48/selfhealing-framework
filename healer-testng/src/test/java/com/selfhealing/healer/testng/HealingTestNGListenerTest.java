@@ -3,7 +3,6 @@ package com.selfhealing.healer.testng;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.selfhealing.healer.core.Json;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.testng.TestNG;
 
 import java.nio.file.Files;
@@ -16,9 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class HealingTestNGListenerTest {
 
     @Test
-    void reportsHealsAndAnalysesFailures(@TempDir Path dir) throws Exception {
-        System.setProperty("healer.storeDir", dir.resolve("store").toString());
-        System.setProperty("healer.reportDir", dir.resolve("report").toString());
+    void reportsHealsAndAnalysesFailures() throws Exception {
+        Path report = Path.of(System.getProperty("healer.reportDir"));   // configured in the pom (see there)
 
         TestNG testng = new TestNG();
         testng.setTestClasses(new Class<?>[] {LoginFlow.class});
@@ -26,18 +24,18 @@ class HealingTestNGListenerTest {
         testng.setVerbose(0);
         testng.run();
 
-        JsonNode report = Json.MAPPER.readTree(dir.resolve("report/healing-report.json").toFile());
-        assertEquals(2, report.path("tests").size(), report.toString());
-        JsonNode healed = find(report, "LoginFlow.healsRenamedButton");
+        JsonNode json = Json.MAPPER.readTree(report.resolve("healing-report.json").toFile());
+        assertEquals(2, json.path("tests").size(), json.toString());
+        JsonNode healed = find(json, "LoginFlow.healsRenamedButton");
         assertEquals("PASSED", healed.path("status").asText());
-        assertTrue(report.path("summary").path("healed").asInt() >= 1, "the renamed button was healed");
+        assertTrue(json.path("summary").path("healed").asInt() >= 1, "the renamed button was healed");
 
-        JsonNode failed = find(report, "LoginFlow.wrongExpectation");
+        JsonNode failed = find(json, "LoginFlow.wrongExpectation");
         assertEquals("FAILED", failed.path("status").asText());
         assertEquals("ASSERTION", failed.path("triage").path("category").asText());
         assertTrue(failed.path("triage").path("screenshot").asText().startsWith("screenshots/"),
                 "captured before @AfterMethod closed the page");
-        assertTrue(Files.exists(dir.resolve("report/healing-report.html")));
+        assertTrue(Files.exists(report.resolve("healing-report.html")));
     }
 
     private static JsonNode find(JsonNode report, String id) {
