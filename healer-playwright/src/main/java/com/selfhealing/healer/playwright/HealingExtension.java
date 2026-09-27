@@ -9,7 +9,10 @@ import com.selfhealing.healer.core.junit.AbstractHealingExtension;
  * reports at the end of the run.
  *
  * <pre>{@code @ExtendWith(HealingExtension.class)}</pre>
+ *
+ * @deprecated use {@code com.selfhealing.healer.junit5.HealingExtension} from healer-junit5 (same behaviour, either adapter)
  */
+@Deprecated(since = "2.2.0")
 public class HealingExtension extends AbstractHealingExtension {
 
     private static final HealingRuntime RUNTIME = new PlaywrightRuntime();

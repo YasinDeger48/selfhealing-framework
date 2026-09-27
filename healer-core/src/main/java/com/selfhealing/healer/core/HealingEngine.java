@@ -62,8 +62,12 @@ public class HealingEngine {
 
     /** Stores the element behind a working selector; the original selector works again, so drop any cached heal. */
     public void remember(String key, String selector, String pageUrl, ElementSnapshot element) {
-        fingerprints.put(key, new Fingerprint(key, selector, pageUrl, element));
-        cache.remove(key);
+        // Unchanged element: leave the file alone - a new timestamp on every run means noisy diffs and merge conflicts.
+        Fingerprint known = fingerprints.get(key).orElse(null);
+        boolean unchanged = known != null && selector.equals(known.getSelector()) && "recorded".equals(known.getOrigin())
+                && known.getElement() != null && known.getElement().sameAs(element);
+        if (!unchanged) fingerprints.put(key, new Fingerprint(key, selector, pageUrl, element));
+        if (cache.get(key).isPresent()) cache.remove(key);
     }
 
     /** The heal stored for this element by an earlier run, if it was made for the same original selector. */

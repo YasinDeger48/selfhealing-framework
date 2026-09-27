@@ -7,6 +7,9 @@ on:
   push:
     tags: ["v*"]
 
+permissions:
+  contents: write   # the GitHub Release
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -36,6 +39,16 @@ jobs:
           CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
           CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      # A GitHub Release with this version's section of CHANGELOG.md
+      - name: GitHub Release
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v h="## [$VERSION]" 'index($0, h) == 1 {f=1; next} /^## \[/ || /^\[[0-9.]+\]: / {f=0} f' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "See CHANGELOG.md" > notes.md
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       # The Maven errors as annotations, readable on the run page without downloading logs.
       - name: Annotate errors

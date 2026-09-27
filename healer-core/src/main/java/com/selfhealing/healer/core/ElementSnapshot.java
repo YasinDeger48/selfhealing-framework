@@ -53,6 +53,16 @@ public class ElementSnapshot {
         return sb.toString();
     }
 
+    /** The same element as before: identity and text equal, position and size within a few pixels (layout jitter). */
+    public boolean sameAs(ElementSnapshot o) {
+        if (o == null) return false;
+        return java.util.Objects.equals(tag, o.tag) && java.util.Objects.equals(attributes, o.attributes)
+                && java.util.Objects.equals(text, o.text) && java.util.Objects.equals(labelText, o.labelText)
+                && java.util.Objects.equals(ancestors, o.ancestors)
+                && Math.abs(x - o.x) <= 5 && Math.abs(y - o.y) <= 5
+                && Math.abs(width - o.width) <= 5 && Math.abs(height - o.height) <= 5;
+    }
+
     public String getTag() { return tag; }
     public void setTag(String tag) { this.tag = tag; }
     public Map<String, String> getAttributes() { return attributes; }

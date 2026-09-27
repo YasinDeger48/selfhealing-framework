@@ -13,8 +13,8 @@ project — add it as a dependency, wrap your locators, done.
 | Artifact | What it is |
 |---|---|
 | `io.github.yasindeger48:healer-core` | Driver-independent engine: element fingerprints, local matching, healing cache, events, reports |
-| `io.github.yasindeger48:healer-playwright` | Playwright adapter (`SelfHealingPage`, `HealingLocator`), JUnit 5 extension, HTML/PDF report |
-| `io.github.yasindeger48:healer-selenium` | Selenium WebDriver adapter (`SelfHealingDriver`, `HealingElement`), JUnit 5 extension, HTML/PDF report |
+| `io.github.yasindeger48:healer-playwright` | Playwright adapter (`SelfHealingPage`, `HealingLocator`, `HealerBrowser`), HTML/PDF report |
+| `io.github.yasindeger48:healer-selenium` | Selenium WebDriver adapter (`SelfHealingDriver`, `HealingElement`, `HealerDriver`), HTML/PDF report |
 | `io.github.yasindeger48:healer-testng` | TestNG listener (registers itself) - use with either adapter instead of the JUnit 5 extension |
 | `io.github.yasindeger48:healer-junit5` | JUnit 5 (Jupiter) extension for either adapter - `@ExtendWith(HealingExtension.class)` or auto-detection |
 | `io.github.yasindeger48:healer-junit4` | JUnit 4 rule - `@Rule public HealingRule healing = new HealingRule();` |
@@ -22,8 +22,9 @@ project — add it as a dependency, wrap your locators, done.
 | `io.github.yasindeger48:healer-claude` | Optional last healing stage backed by the Claude API — enabled by adding it to the classpath |
 
 Requirements: Java 17+, Playwright for Java **or** Selenium 4, JUnit 5 **or** JUnit 4 **or** TestNG 7 **or** Cucumber 7,
-Maven Surefire **3.6.0+** (see the note below). Everything below works the same with both
+Maven Surefire **3.6.0+** (see the note below) or Gradle. Everything below works the same with both
 adapters: healing, popups, locator quality, failure analysis, reports and code fixes.
+See [Compatibility](#compatibility) for the tested versions and [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 ## Getting started in your project
 
@@ -36,6 +37,12 @@ adapters: healing, popups, locator quality, failure analysis, reports and code f
   <version>2.2.0</version>
   <scope>test</scope>
 </dependency>
+<dependency>
+  <groupId>io.github.yasindeger48</groupId>
+  <artifactId>healer-junit5</artifactId>
+  <version>2.2.0</version>
+  <scope>test</scope>
+</dependency>
 <!-- optional: Claude stage -->
 <dependency>
   <groupId>io.github.yasindeger48</groupId>
@@ -45,15 +52,15 @@ adapters: healing, popups, locator quality, failure analysis, reports and code f
 </dependency>
 ```
 
-Use `healer-selenium` instead of `healer-playwright` for Selenium. Then add the module of your test runner:
-`healer-junit5`, `healer-junit4`, `healer-testng` or `healer-cucumber` (for JUnit 5 the adapters also contain an
-extension of their own, so `healer-junit5` is optional there). Gradle: `testImplementation("io.github.yasindeger48:healer-playwright:2.2.0")`.
+Use `healer-selenium` instead of `healer-playwright` for Selenium, and the module of your test runner:
+`healer-junit5`, `healer-junit4`, `healer-testng` or `healer-cucumber`. (The JUnit 5 extensions inside the adapters,
+`...playwright.HealingExtension` and `...selenium.SeleniumHealingExtension`, still work but are deprecated since 2.2.0.) Gradle: `testImplementation("io.github.yasindeger48:healer-playwright:2.2.0")`.
 Building from source instead: `mvn install` in this repository, then use the same coordinates.
 
 **2. Wrap your Playwright page and give each element a stable name:**
 
 ```java
-@ExtendWith(HealingExtension.class)
+@ExtendWith(HealingExtension.class)   // com.selfhealing.healer.junit5.HealingExtension
 class LoginTest {
 
     SelfHealingPage healer = SelfHealingPage.wrap(page);   // your existing Playwright Page
@@ -85,7 +92,7 @@ payment.locator("Payment.cardNumber", "#card").fill("4111 1111 1111 1111");
 (`id`, `name`, `cssSelector`, `xpath`, `className`, `linkText` ...); healed selectors are CSS.
 
 ```java
-@ExtendWith(SeleniumHealingExtension.class)
+@ExtendWith(HealingExtension.class)   // the same healer-junit5 extension
 class LoginTest {
 
     SelfHealingDriver healer = SelfHealingDriver.wrap(driver);   // your existing WebDriver
@@ -444,9 +451,30 @@ run continues without video.
 | `healer.llm.maxCallsPerRun` | `50` | Claude call budget per run |
 | `healer.llm.timeoutSeconds` | `90` | Per-call timeout; on error the step simply fails |
 
+## Compatibility
+
+Tested on every change (CI) and with the [compatibility matrix](https://github.com/YasinDeger48/selfhealing-demo/tree/main/compatibility-matrix)
+(one project per combination, each run once passing and once with a deliberately failing test):
+
+| | Tested |
+|---|---|
+| Java | 17, 21, 25 |
+| OS | Linux, Windows (macOS: not tested in CI) |
+| Build | Maven (Surefire 3.6.0+), Gradle 8 (`useJUnitPlatform()`) |
+| Playwright for Java | 1.45 - 1.63 |
+| Selenium | 4.21 - 4.49 |
+| Test runners | JUnit 5, JUnit 4, TestNG 7, Cucumber 7 on the JUnit Platform, TestNG and JUnit 4 |
+| Parallel | JUnit 5 (`junit.jupiter.execution.parallel.*`), TestNG methods, Cucumber on the JUnit Platform and TestNG |
+| Browsers | Chromium, Chrome, Edge (Playwright and Selenium); Firefox and WebKit/Safari can be selected with `browser.name`, not in CI |
+
+Older Playwright/Selenium versions may work but are not tested. The framework is built against the newest
+versions in the table; your project's own Playwright/Selenium version wins (Maven's nearest definition).
+
 ## Parallel runs
 
-- Parallel JUnit threads in one JVM are supported (per-thread test context, synchronized stores).
+- Parallel threads in one JVM are supported (per-thread test context, synchronized stores): JUnit 5 parallel
+  execution, TestNG `parallel=methods`, Cucumber parallel scenarios. Every thread needs its own browser page /
+  WebDriver (e.g. a `ThreadLocal`); tests on different threads may share element keys.
 - Several JVMs (Surefire `forkCount > 1`): `.healer` files are written under an OS file lock and merged, so
   no JVM overwrites another's fingerprints. Give every JVM of one build the same `healer.runId` and their
   results are merged into one report (each JVM writes `<reportDir>/parts/<runId>-<pid>.json`; the last one

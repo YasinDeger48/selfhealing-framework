@@ -116,4 +116,18 @@ class HealingEngineTest {
                 "id", "tab-reviews-v2", "data-testid", "tab-reviews-v2", "class", "tab"));
         assertEquals("#tab-reviews-v2", engine.heal("Product.reviewsTab", "#tab-reviews", renamed).suggestion().selector());
     }
+
+    @Test
+    void anUnchangedElementDoesNotRewriteTheFingerprintFile(@TempDir Path dir) throws Exception {
+        HealingEngine engine = engine(dir, false, null);
+        engine.remember("Login.username", "#login-username", "/login", username("login-username", "login-username-input"));
+        Path file = dir.resolve("fingerprints.json");
+        String first = java.nio.file.Files.readString(file);
+        Thread.sleep(20);
+        engine.remember("Login.username", "#login-username", "/login", username("login-username", "login-username-input"));
+        assertEquals(first, java.nio.file.Files.readString(file), "same element: file untouched (no new timestamp)");
+
+        engine.remember("Login.username", "#login-username", "/login", username("login-username", "user-input"));
+        assertFalse(first.equals(java.nio.file.Files.readString(file)), "changed element: fingerprint updated");
+    }
 }

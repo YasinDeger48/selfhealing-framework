@@ -27,6 +27,6 @@ public class SeleniumRuntime implements HealingRuntime {
 
     @Override
     public Optional<Path> exportPdf(Path html, Path pdf, HealerConfig config) {
-        return SeleniumHealingExtension.printToPdf(html, pdf, config.get("healer.report.pdfBrowser", "msedge"));
+        return SeleniumPdf.print(html, pdf, config.get("healer.report.pdfBrowser", "msedge"));
     }
 }
