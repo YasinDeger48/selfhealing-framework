@@ -130,4 +130,35 @@ class HealingEngineTest {
         engine.remember("Login.username", "#login-username", "/login", username("login-username", "user-input"));
         assertFalse(first.equals(java.nio.file.Files.readString(file)), "changed element: fingerprint updated");
     }
+
+    @Test
+    void anUnchangedElementIsRecognisedAfterReadingTheFileAgain(@TempDir Path dir) throws Exception {
+        // the next run reads the file: empty values (label "", text "") were not written and come back as null
+        ElementSnapshot badge = HeuristicMatcherTest.el("span", "", List.of("header"), "id", "cart-count");
+        badge.setLabelText("");
+        engine(dir, false, null).remember("Header.cartBadge", "#cart-count", "/products", badge);
+        Path file = dir.resolve("fingerprints.json");
+        String first = java.nio.file.Files.readString(file);
+        Thread.sleep(20);
+        ElementSnapshot again = HeuristicMatcherTest.el("span", "", List.of("header"), "id", "cart-count");
+        again.setLabelText("");
+        engine(dir, false, null).remember("Header.cartBadge", "#cart-count", "/products", again);
+        assertEquals(first, java.nio.file.Files.readString(file), "same element in a new run: file untouched");
+    }
+
+    @Test
+    void positionAndNumbersInTheTextDoNotCountAsAChange(@TempDir Path dir) throws Exception {
+        ElementSnapshot before = HeuristicMatcherTest.el("div", "Order number: SL-37307842", List.of("main"), "data-testid", "order-success");
+        engine(dir, false, null).remember("Cart.orderSuccess", "[data-testid='order-success']", "/cart", before);
+        Path file = dir.resolve("fingerprints.json");
+        String first = java.nio.file.Files.readString(file);
+        ElementSnapshot after = HeuristicMatcherTest.el("div", "Order number: SL-14256909", List.of("main"), "data-testid", "order-success");
+        after.setY(before.getY() + 140);
+        engine(dir, false, null).remember("Cart.orderSuccess", "[data-testid='order-success']", "/cart", after);
+        assertEquals(first, java.nio.file.Files.readString(file), "other order number, scrolled: same element");
+
+        ElementSnapshot renamed = HeuristicMatcherTest.el("div", "Order received", List.of("main"), "data-testid", "order-success");
+        engine(dir, false, null).remember("Cart.orderSuccess", "[data-testid='order-success']", "/cart", renamed);
+        assertFalse(first.equals(java.nio.file.Files.readString(file)), "other text: fingerprint updated");
+    }
 }

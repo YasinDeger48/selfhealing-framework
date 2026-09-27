@@ -53,14 +53,25 @@ public class ElementSnapshot {
         return sb.toString();
     }
 
-    /** The same element as before: identity and text equal, position and size within a few pixels (layout jitter). */
+    /**
+     * The same element as before, so its stored fingerprint need not be rewritten: identity (tag, attributes, ancestors,
+     * label) and text equal - digits aside (counters, order numbers, prices change from run to run). Position and size
+     * are not compared: they depend on scrolling, window size and page state.
+     */
     public boolean sameAs(ElementSnapshot o) {
         if (o == null) return false;
-        return java.util.Objects.equals(tag, o.tag) && java.util.Objects.equals(attributes, o.attributes)
-                && java.util.Objects.equals(text, o.text) && java.util.Objects.equals(labelText, o.labelText)
-                && java.util.Objects.equals(ancestors, o.ancestors)
-                && Math.abs(x - o.x) <= 5 && Math.abs(y - o.y) <= 5
-                && Math.abs(width - o.width) <= 5 && Math.abs(height - o.height) <= 5;
+        return same(tag, o.tag) && java.util.Objects.equals(attributes, o.attributes)
+                && same(digitsAside(text), digitsAside(o.text)) && same(labelText, o.labelText)
+                && java.util.Objects.equals(ancestors, o.ancestors);
+    }
+
+    /** Empty text is not written to the file (NON_EMPTY), so it comes back as null: null and "" are the same. */
+    private static boolean same(String a, String b) {
+        return (a == null ? "" : a).equals(b == null ? "" : b);
+    }
+
+    private static String digitsAside(String s) {
+        return s == null ? null : s.replaceAll("\\d+", "#");
     }
 
     public String getTag() { return tag; }

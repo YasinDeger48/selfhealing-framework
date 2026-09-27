@@ -3,6 +3,14 @@
 All notable changes. Versions follow [semantic versioning](https://semver.org); coordinates
 `io.github.yasindeger48:healer-*`.
 
+## [2.2.1]
+
+### Fixed
+- `.healer/fingerprints.json` was still rewritten on every run with only new timestamps: an empty label or text is not
+  stored in the file and came back as `null`, which did not equal the browser's `""`. Unchanged elements are now
+  recognised after reading the file, and position, size and numbers in the text (counters, order numbers) no longer
+  count as a change - only the element's identity and text do.
+
 ## [2.2.0]
 
 ### Added
@@ -58,6 +66,7 @@ First release on Maven Central: Playwright and Selenium adapters, local heuristi
 code fixes, popups, locator quality, failure analysis, plain-language steps, TestNG and Cucumber integrations,
 accuracy benchmark, reports in six languages.
 
+[2.2.1]: https://github.com/YasinDeger48/selfhealing-framework/releases/tag/v2.2.1
 [2.2.0]: https://github.com/YasinDeger48/selfhealing-framework/releases/tag/v2.2.0
 [2.1.0]: https://github.com/YasinDeger48/selfhealing-framework/releases/tag/v2.1.0
 [2.0.1]: https://github.com/YasinDeger48/selfhealing-framework/releases/tag/v2.0.1

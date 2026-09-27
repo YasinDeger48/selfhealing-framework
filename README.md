@@ -34,27 +34,27 @@ See [Compatibility](#compatibility) for the tested versions and [CHANGELOG.md](C
 <dependency>
   <groupId>io.github.yasindeger48</groupId>
   <artifactId>healer-playwright</artifactId>
-  <version>2.2.0</version>
+  <version>2.2.1</version>
   <scope>test</scope>
 </dependency>
 <dependency>
   <groupId>io.github.yasindeger48</groupId>
   <artifactId>healer-junit5</artifactId>
-  <version>2.2.0</version>
+  <version>2.2.1</version>
   <scope>test</scope>
 </dependency>
 <!-- optional: Claude stage -->
 <dependency>
   <groupId>io.github.yasindeger48</groupId>
   <artifactId>healer-claude</artifactId>
-  <version>2.2.0</version>
+  <version>2.2.1</version>
   <scope>test</scope>
 </dependency>
 ```
 
 Use `healer-selenium` instead of `healer-playwright` for Selenium, and the module of your test runner:
 `healer-junit5`, `healer-junit4`, `healer-testng` or `healer-cucumber`. (The JUnit 5 extensions inside the adapters,
-`...playwright.HealingExtension` and `...selenium.SeleniumHealingExtension`, still work but are deprecated since 2.2.0.) Gradle: `testImplementation("io.github.yasindeger48:healer-playwright:2.2.0")`.
+`...playwright.HealingExtension` and `...selenium.SeleniumHealingExtension`, still work but are deprecated since 2.2.0.) Gradle: `testImplementation("io.github.yasindeger48:healer-playwright:2.2.1")`.
 Building from source instead: `mvn install` in this repository, then use the same coordinates.
 
 **2. Wrap your Playwright page and give each element a stable name:**

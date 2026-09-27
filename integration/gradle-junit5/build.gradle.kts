@@ -1,10 +1,10 @@
 // A Gradle project using the framework like any user would. CI runs it against the freshly built version
-// (mvn install puts it into the local Maven repository): gradle test -PhealerVersion=2.2.0
+// (mvn install puts it into the local Maven repository): gradle test -PhealerVersion=2.2.1
 plugins {
     java
 }
 
-val healerVersion: String = (findProperty("healerVersion") as String?) ?: "2.2.0"
+val healerVersion: String = (findProperty("healerVersion") as String?) ?: "2.2.1"
 
 repositories {
     mavenLocal()
