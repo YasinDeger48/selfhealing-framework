@@ -502,8 +502,8 @@ site. They use this framework only through the Maven dependencies above — like
 
 ## Maven note
 
-`.mvn/maven.config` resolves dependencies from Maven Central directly (a corporate mirror configured in
-`~/.m2/settings.xml` may be reachable only on VPN). Delete it to use your global settings.
+`.mvn/maven.config` resolves dependencies from Maven Central directly, independent of any mirror configured in
+`~/.m2/settings.xml`. Delete it to use your global settings.
 
 ## Releasing a new version
 
